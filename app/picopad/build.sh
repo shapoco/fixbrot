@@ -53,6 +53,7 @@ pushdir "${PICOLIBSDK_PATH}/PicoPad"
   pushdir "./${GRPDIR}/${TARGET}"
     cp -rp ${LIB_DIR}/include/* "."
     cp -rp ${SRC_TARGET_DIR}/* "."
+    touch src/*.cpp
     ./c.sh "${ARG_DEVICE}"
     mkdir -p "${ARG_OUTDIR}"
     cp *.hex *.bin *.lst *.sym *.siz *.uf2 "${ARG_OUTDIR}/."

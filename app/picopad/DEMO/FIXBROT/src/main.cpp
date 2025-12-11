@@ -12,26 +12,10 @@
 using namespace fixbrot;
 
 uint64_t now_us = 0;
-App<WIDTH, HEIGHT> game;
-
-// // alarm callback
-// void AlarmCB(sAlarm *a) {
-//   LedFlip(LED1);
-//   LedFlip(LED2);
-// }
+App<WIDTH, HEIGHT> app;
 
 int main() {
-  // register alarm
-  //  sAlarm a;
-  //  a.time = SysTime + 100; // time of first alarm in [ms]
-  //  a.delta = 500;          // delta of next alarm in [ms]
-  //  a.callback = AlarmCB;   // callback function
-  //  AlarmReg(&a);           // register alarm
-
-  //  DispInit(1);
-  // DispDrawText("Hello World!\n", 0, 0, 0, 0, 0xFFFF, 0x0000);
-
-  game.init();
+  app.init();
   now_us = Time64();
 
   while (True) {
@@ -69,7 +53,7 @@ int main() {
       ResetToBootLoader();
     }
 
-    game.service(delta_us, keys);
+    app.service(delta_us, keys);
   }
 }
 
@@ -81,3 +65,7 @@ result_t fixbrot::send_line(pos_t x, pos_t y, pos_t width, const col_t *data) {
   DispStopImg();
   return result_t::SUCCESS;
 }
+
+void fixbrot::compute_started() { LedOn(LED1); }
+
+void fixbrot::compute_finished(result_t res) { LedOff(LED1); }

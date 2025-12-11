@@ -5,11 +5,12 @@
 #include <stdint.h>
 #endif
 
+#include "fixbrot/common.hpp"
+
 namespace fixbrot {
 
 struct fixed32_t {
-  static constexpr int INT_BITS = 8;
-  static constexpr int FRAC_BITS = 32 - INT_BITS;
+  static constexpr int FRAC_BITS = 32 - FIXED_INT_BITS;
   int32_t raw;
 
   inline fixed32_t() : raw(0) {}

@@ -5,11 +5,12 @@
 #include <stdint.h>
 #endif
 
+#include "fixbrot/common.hpp"
+
 namespace fixbrot {
 
 struct fixed64_t {
-  static constexpr int INT_BITS = 8;
-  static constexpr int FRAC_BITS = 64 - INT_BITS;
+  static constexpr int FRAC_BITS = 64 - FIXED_INT_BITS;
   int64_t raw;
 
   inline fixed64_t() : raw(0) {}
@@ -45,8 +46,8 @@ struct fixed64_t {
     bool b_neg = (other.raw < 0);
     uint64_t a = a_neg ? -raw : raw;
     uint64_t b = b_neg ? -other.raw : other.raw;
-    a <<= (INT_BITS / 2);
-    b <<= (INT_BITS / 2);
+    a <<= (FIXED_INT_BITS / 2);
+    b <<= (FIXED_INT_BITS / 2);
     uint32_t ah = (uint32_t)(a >> 32);
     uint32_t al = (uint32_t)(a & 0xFFFFFFFF);
     uint32_t bh = (uint32_t)(b >> 32);

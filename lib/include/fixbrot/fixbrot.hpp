@@ -106,6 +106,8 @@ struct cell_t {
   }
 };
 
+void compute_started();
+void compute_finished(result_t res);
 result_t send_line(pos_t x, pos_t y, pos_t width, const col_t *data);
 
 template <uint16_t prm_WIDTH, uint16_t prm_HEIGHT> class App {
@@ -127,7 +129,6 @@ public:
 
   float scroll_accum_x = 0;
   float scroll_accum_y = 0;
-  pos_t scan_y = 0;
 
   pad_t last_keys = pad_t::NONE;
 
@@ -191,8 +192,7 @@ public:
       }
     }
 
-    for (int i = 0; i < 16; i++) {
-      pos_t y = scan_y;
+    for (pos_t y = 0; y < SCREEN_H; y++) {
       for (pos_t x = 0; x < SCREEN_W; x++) {
         iter_t iter = work_buff[y * SCREEN_W + x];
         if (iter < ITER_MAX) {
@@ -205,12 +205,7 @@ public:
           line_buff[x] = 0x0000;
         }
       }
-      FIXBROT_TRY(send_line(0, scan_y, SCREEN_W, line_buff));
-      if (scan_y + 1 < SCREEN_H) {
-        scan_y++;
-      } else {
-        scan_y = 0;
-      }
+      FIXBROT_TRY(send_line(0, y, SCREEN_W, line_buff));
     }
 
     last_keys = keys;
@@ -277,6 +272,13 @@ private:
   }
 
   result_t render(rect_t view) {
+    compute_started();
+    result_t res = render_inner(view);
+    compute_finished(res);
+    return res;
+  }
+
+  result_t render_inner(rect_t view) {
     queue_wr_ptr = 0;
     queue_rd_ptr = 0;
     for (pos_t y = view.y; y < view.y + view.h; y++) {
