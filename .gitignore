@@ -1,5 +1,6 @@
-build/
 settings.json
+
+build/
 *.bin
 *.hex
 *.lst
@@ -7,3 +8,6 @@ settings.json
 *.sym
 *.uf2
 *.o
+
+*.tmp/
+*.tmp

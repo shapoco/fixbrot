@@ -1,6 +1,25 @@
 #!/bin/bash
 
-set -eu
+set -e
+
+ARG_DEVICE="picopad20"
+ARG_OUTDIR="bin"
+while getopts d:o: opt; do
+  case ${opt} in
+    d)
+      ARG_DEVICE="${OPTARG}"
+      ;;
+    o)
+      ARG_OUTDIR="${OPTARG}"
+      ;;
+    *)
+      echo "Usage: $0 [-d device]"
+      exit 1
+      ;;
+  esac
+done
+
+set -u
 
 function pushdir() {
   pushd "${1}" > /dev/null
@@ -15,40 +34,28 @@ REPO_DIR=$(cd ../.. && pwd)
 GRPDIR=DEMO
 TARGET=FIXBROT
 
-set +u
-if [ -z "${DEVICE_LIST}" ]; then
-  DEVICE_LIST=(picopad10 picopad20)
-fi
-set -u
-
 SRC_TARGET_DIR="${APP_DIR}/${GRPDIR}/${TARGET}"
 LIB_DIR="${REPO_DIR}/lib"
 
-for device in "${DEVICE_LIST[@]}"; do
-  dest_bin_dir="${APP_DIR}/bin/${device}"
+DEST_BIN_DIR="${APP_DIR}/bin/${ARG_DEVICE}"
 
-  pushdir "${PICOLIBSDK_PATH}/_tools"
-    pushdir elf2uf2
-      g++ -o elf2uf2 *.cpp
-    popdir
-    pushdir PicoPadLoaderCrc
-      g++ -o LoaderCrc *.cpp
-    popdir
+pushdir "${PICOLIBSDK_PATH}/_tools"
+  pushdir elf2uf2
+    g++ -o elf2uf2 *.cpp
   popdir
-
-  pushdir "${PICOLIBSDK_PATH}/PicoPad"
-    mkdir -p "./${GRPDIR}/${TARGET}/src"
-    pushdir "./${GRPDIR}/${TARGET}"
-      cp -rp ${LIB_DIR}/include/* "."
-      cp -rp ${SRC_TARGET_DIR}/* "."
-      #set +e
-      #./d.sh
-      #set -e
-      #touch src/*.cpp
-      ./c.sh "${device}"
-      mkdir -p "${dest_bin_dir}"
-      cp *.hex *.bin *.lst *.sym *.siz *.uf2 "${dest_bin_dir}/."
-    popdir
+  pushdir PicoPadLoaderCrc
+    g++ -o LoaderCrc *.cpp
   popdir
+popdir
 
-done
+pushdir "${PICOLIBSDK_PATH}/PicoPad"
+  mkdir -p "./${GRPDIR}/${TARGET}/src"
+  pushdir "./${GRPDIR}/${TARGET}"
+    cp -rp ${LIB_DIR}/include/* "."
+    cp -rp ${SRC_TARGET_DIR}/* "."
+    ./c.sh "${ARG_DEVICE}"
+    mkdir -p "${ARG_OUTDIR}"
+    cp *.hex *.bin *.lst *.sym *.siz *.uf2 "${ARG_OUTDIR}/."
+  popdir
+popdir
+
