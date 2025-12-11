@@ -1,0 +1,9 @@
+build/
+settings.json
+*.bin
+*.hex
+*.lst
+*.siz
+*.sym
+*.uf2
+*.o

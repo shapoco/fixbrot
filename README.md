@@ -1,2 +1,3 @@
-# fixbrot
+# FixBrot
+
 Mandelbrot Viewer for MCUs

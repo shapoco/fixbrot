@@ -1,0 +1,32 @@
+{
+    "configurations": [
+        {
+            "name": "PicoPad",
+            "includePath": [
+                "${PICOLIBSDK_PATH}",
+                "${PICOLIBSDK_PATH}/_display",
+                "${PICOLIBSDK_PATH}/_display/st7789",
+                "${PICOLIBSDK_PATH}/_devices/picopad",
+                "${PICOLIBSDK_PATH}/_sdk/inc",
+                "${workspaceFolder}/lib/include",
+                "${workspaceFolder}/app/picopad/DEMO/FIXBROT",
+                "${workspaceFolder}/app/picopad/DEMO/FIXBROT/src"
+            ],
+            "defines": [
+                "USE_PICOPAD=1",
+                "PICO_ROOT_PATH=\"${PICOLIBSDK_PATH}\"",
+                "PICOLIBSDK_DISPLAY_DIR=\"${PICOLIBSDK_DISPLAY_DIR}\"",
+                "PICOLIBSDK_FONT_DIR=\"${PICOLIBSDK_FONT_DIR}\"",
+                "PICOLIBSDK_LIB_DIR=\"${PICOLIBSDK_LIB_DIR}\"",
+                "PICOLIBSDK_SDK_DIR=\"${PICOLIBSDK_SDK_DIR}\"",
+                "INCLUDES_H=\"${PICOLIBSDK_PATH}/includes.h\"",
+                "CONFIG_DEF_H=\"${PICOLIBSDK_PATH}/config_def.h\""
+            ],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c17",
+            "cppStandard": "gnu++17",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+}
