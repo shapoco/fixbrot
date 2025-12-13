@@ -2,7 +2,7 @@
 rem Compilation...
 
 set TARGET=FIXBROT
-set GRPDIR=DEMO
+set GRPDIR=PROG
 set MEMMAP=
 
 if "%1"=="" goto default

@@ -31,7 +31,7 @@ function popdir() {
 
 APP_DIR=$(pwd)
 REPO_DIR=$(cd ../.. && pwd)
-GRPDIR=DEMO
+GRPDIR=PROG
 TARGET=FIXBROT
 
 SRC_TARGET_DIR="${APP_DIR}/${GRPDIR}/${TARGET}"

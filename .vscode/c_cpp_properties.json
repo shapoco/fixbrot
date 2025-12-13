@@ -9,8 +9,8 @@
                 "${PICOLIBSDK_PATH}/_devices/picopad",
                 "${PICOLIBSDK_PATH}/_sdk/inc",
                 "${workspaceFolder}/lib/include",
-                "${workspaceFolder}/app/picopad/DEMO/FIXBROT",
-                "${workspaceFolder}/app/picopad/DEMO/FIXBROT/src"
+                "${workspaceFolder}/app/picopad/PROG/FIXBROT",
+                "${workspaceFolder}/app/picopad/PROG/FIXBROT/src"
             ],
             "defines": [
                 "USE_PICOPAD=1",

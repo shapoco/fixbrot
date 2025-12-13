@@ -1,6 +1,6 @@
 .PHONY: all build flash clean
 
-GRPDIR := DEMO
+GRPDIR := PROG
 TARGET := FIXBROT
 DEVICE := picopad20
 
