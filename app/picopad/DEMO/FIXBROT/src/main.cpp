@@ -91,13 +91,16 @@ void fixbrot::on_render_finished(result_t res) { LedOff(LED1); }
 
 result_t fixbrot::on_iterate() { return engine0.service(); }
 
+static bool use_engine0 = true;
 result_t fixbrot::on_dispatch(const vec_t &loc) {
   // if (engine0.load() <= engine1.load()) {
-  if ((loc.x + loc.y) & 1) {
+  // if ((loc.x  + loc.y) & 1) {
+  if (use_engine0) {
     return engine0.dispatch(loc);
   } else {
     return engine1.dispatch(loc);
   }
+  use_engine0 = !use_engine0;
 }
 
 bool fixbrot::on_collect(cell_t *resp) {

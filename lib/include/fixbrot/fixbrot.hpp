@@ -55,15 +55,9 @@ public:
   result_t service(uint32_t delta_us, pad_t keys) {
     if (busy_items == 0) {
       if ((keys & pad_t::ZOOM_IN) && !(last_keys & pad_t::ZOOM_IN)) {
-        scene.scale_exp++;
-        scene.step = real_exp2(-scene.scale_exp);
-        FIXBROT_TRY(clear_rect(rect_t{0, 0, SCREEN_W, SCREEN_H}));
-        FIXBROT_TRY(start_render(rect_t{0, 0, SCREEN_W, SCREEN_H}));
+        zoom_in();
       } else if ((keys & pad_t::ZOOM_OUT) && !(last_keys & pad_t::ZOOM_OUT)) {
-        scene.scale_exp--;
-        scene.step = real_exp2(-scene.scale_exp);
-        FIXBROT_TRY(clear_rect(rect_t{0, 0, SCREEN_W, SCREEN_H}));
-        FIXBROT_TRY(start_render(rect_t{0, 0, SCREEN_W, SCREEN_H}));
+        zoom_out();
       } else {
         if (keys & pad_t::UP) {
           scroll_accum_y -= (float)delta_us * 0.0001f;
@@ -100,23 +94,23 @@ public:
     } else {
       FIXBROT_TRY(iterate());
 
-      if (busy_items == 0) {
-        for (pos_t y = 0; y < SCREEN_H; y++) {
-          for (pos_t x = 0; x < SCREEN_W; x++) {
-            iter_t iter = work_buff[y * SCREEN_W + x];
-            if (iter < ITER_MAX) {
-              uint16_t gray = iter % 64;
-              if (gray >= 32) {
-                gray = 63 - gray;
-              }
-              line_buff[x] = (gray << 11) | (gray << 6) | gray;
-            } else {
-              line_buff[x] = 0x0000;
+      // if (busy_items == 0) {
+      for (pos_t y = 0; y < SCREEN_H; y++) {
+        for (pos_t x = 0; x < SCREEN_W; x++) {
+          iter_t iter = work_buff[y * SCREEN_W + x];
+          if (iter < ITER_MAX) {
+            uint16_t gray = iter % 64;
+            if (gray >= 32) {
+              gray = 63 - gray;
             }
+            line_buff[x] = (gray << 11) | (gray << 6) | gray;
+          } else {
+            line_buff[x] = 0x0000;
           }
-          FIXBROT_TRY(on_send_line(0, y, SCREEN_W, line_buff));
         }
+        FIXBROT_TRY(on_send_line(0, y, SCREEN_W, line_buff));
       }
+      //}
     }
 
     last_keys = keys;
@@ -134,7 +128,7 @@ private:
     dest.h = SCREEN_H - ((delta.y >= 0) ? delta.y : -delta.y);
     dest.w = SCREEN_W - ((delta.x >= 0) ? delta.x : -delta.x);
 
-    // スクロール
+    // scroll image data
     iter_t *src_line = work_buff;
     iter_t *dst_line = work_buff;
     if (delta.x >= 0) {
@@ -159,7 +153,7 @@ private:
       }
     }
 
-    // 新しい領域をクリア
+    // clear new area
     if (delta.x > 0) {
       FIXBROT_TRY(clear_rect(rect_t{dest.right(), 0, delta.x, SCREEN_H}));
     } else if (delta.x < 0) {
@@ -171,35 +165,90 @@ private:
       FIXBROT_TRY(clear_rect(rect_t{dest.x, 0, dest.w, (pos_t)-delta.y}));
     }
 
-    // 新しい領域をレンダリング
+    // render new area
     FIXBROT_TRY(start_render({0, 0, SCREEN_W, SCREEN_H}));
     if (delta.x != 0) {
       pos_t x0 = (delta.x > 0) ? (dest.right() - 1) : dest.x;
       pos_t x1 = (delta.x > 0) ? dest.right() : (dest.x - 1);
-      cell_t a = get_cell(x0, dest.y);
-      cell_t c = get_cell(x1, dest.y);
-      for (pos_t y = dest.y; y < dest.y + dest.h - 1; y++) {
-        cell_t b = get_cell(x0, y + 1);
-        cell_t d = get_cell(x1, y + 1);
-        FIXBROT_TRY(compare(a, b, c, d));
-        a = b;
-        c = d;
-      }
+      scan_vertical(x0, x1, dest.y, dest.h);
     }
     if (delta.y != 0) {
       pos_t y0 = (delta.y > 0) ? (dest.bottom() - 1) : dest.y;
       pos_t y1 = (delta.y > 0) ? dest.bottom() : (dest.y - 1);
-      cell_t a = get_cell(dest.x, y0);
-      cell_t c = get_cell(dest.x, y1);
-      for (pos_t x = dest.x; x < dest.x + dest.w - 1; x++) {
-        cell_t b = get_cell(x + 1, y0);
-        cell_t d = get_cell(x + 1, y1);
-        FIXBROT_TRY(compare(a, b, c, d));
-        a = b;
-        c = d;
-      }
+      scan_horizontal(dest.x, y0, y1, dest.w);
     }
 
+    return result_t::SUCCESS;
+  }
+
+  result_t zoom_in() {
+    scene.scale_exp++;
+    scene.step = real_exp2(-scene.scale_exp);
+    for (pos_t i = 0; i < SCREEN_H; i++) {
+      pos_t dy = (i < SCREEN_H / 2) ? i : (SCREEN_H * 3 / 2 - 1 - i);
+      pos_t sy = SCREEN_H / 4 + (dy / 2);
+      for (pos_t j = 0; j < SCREEN_W; j++) {
+        pos_t dx = (j < SCREEN_W / 2) ? j : (SCREEN_W * 3 / 2 - 1 - j);
+        pos_t sx = SCREEN_W / 4 + (dx / 2);
+        if ((dx & 1) == 0 && (dy & 1) == 0) {
+          work_buff[dy * SCREEN_W + dx] = work_buff[sy * SCREEN_W + sx];
+        } else {
+          work_buff[dy * SCREEN_W + dx] = ITER_BLANK;
+        }
+      }
+    }
+    FIXBROT_TRY(start_render(rect_t{0, 0, SCREEN_W, SCREEN_H}));
+    return result_t::SUCCESS;
+  }
+
+  result_t zoom_out() {
+    scene.scale_exp--;
+    scene.step = real_exp2(-scene.scale_exp);
+    for (pos_t i = 0; i < SCREEN_H; i++) {
+      pos_t dy = (i < SCREEN_H / 2) ? (SCREEN_H / 2 - 1 - i) : i;
+      pos_t sy = dy * 2 - SCREEN_H / 2;
+      for (pos_t j = 0; j < SCREEN_W; j++) {
+        pos_t dx = (j < SCREEN_W / 2) ? (SCREEN_W / 2 - 1 - j) : j;
+        pos_t sx = dx * 2 - SCREEN_W / 2;
+        if (0 <= sx && sx < SCREEN_W && 0 <= sy && sy < SCREEN_H) {
+          work_buff[dy * SCREEN_W + dx] = work_buff[sy * SCREEN_W + sx];
+        } else {
+          work_buff[dy * SCREEN_W + dx] = ITER_BLANK;
+        }
+      }
+    }
+    FIXBROT_TRY(start_render(rect_t{0, 0, SCREEN_W, SCREEN_H}));
+    rect_t rect{SCREEN_W / 4, SCREEN_H / 4, SCREEN_W / 2, SCREEN_H / 2};
+    scan_vertical(rect.x, rect.x - 1, rect.y, rect.h);
+    scan_vertical(rect.right() - 1, rect.right(), rect.y, rect.h);
+    scan_horizontal(rect.x, rect.y, rect.y - 1, rect.w);
+    scan_horizontal(rect.x, rect.bottom() - 1, rect.bottom(), rect.w);
+    return result_t::SUCCESS;
+  }
+
+  result_t scan_vertical(pos_t x0, pos_t x1, pos_t y0, pos_t h) {
+    cell_t a = get_cell(x0, y0);
+    cell_t c = get_cell(x1, y0);
+    for (pos_t y = y0; y < y0 + h - 1; y++) {
+      cell_t b = get_cell(x0, y + 1);
+      cell_t d = get_cell(x1, y + 1);
+      FIXBROT_TRY(compare(a, b, c, d));
+      a = b;
+      c = d;
+    }
+    return result_t::SUCCESS;
+  }
+
+  result_t scan_horizontal(pos_t x0, pos_t y0, pos_t y1, pos_t w) {
+    cell_t a = get_cell(x0, y0);
+    cell_t c = get_cell(x0, y1);
+    for (pos_t x = x0; x < x0 + w - 1; x++) {
+      cell_t b = get_cell(x + 1, y0);
+      cell_t d = get_cell(x + 1, y1);
+      FIXBROT_TRY(compare(a, b, c, d));
+      a = b;
+      c = d;
+    }
     return result_t::SUCCESS;
   }
 
@@ -240,6 +289,7 @@ private:
       return result_t::SUCCESS;
     }
 
+    // border-tracing
     while (true) {
       FIXBROT_TRY(on_iterate());
       cell_t c;
@@ -332,9 +382,6 @@ private:
   }
 
   result_t enqueue(vec_t loc) {
-    // if (loc.x < 0 || SCREEN_W <= loc.x || loc.y < 0 || SCREEN_H <= loc.y) {
-    //   return result_t::SUCCESS;
-    // }
     iter_t &target = work_buff[loc.y * SCREEN_W + loc.x];
     if (target != ITER_BLANK) {
       return result_t::SUCCESS;
