@@ -356,6 +356,7 @@ private:
     }
 
     if (busy_items == 0) {
+      // fill blanks
       iter_t *line_ptr = work_buff;
       for (pos_t y = 0; y < SCREEN_H; y++) {
         iter_t *ptr = line_ptr;

@@ -13,35 +13,49 @@ struct fixed64_t {
   static constexpr int FRAC_BITS = 64 - FIXED_INT_BITS;
   int64_t raw;
 
-  inline fixed64_t() : raw(0) {}
-  inline fixed64_t(int integer)
+  FIXBROT_INLINE fixed64_t() : raw(0) {}
+  FIXBROT_INLINE fixed64_t(int integer)
       : raw(static_cast<int64_t>(integer) << FRAC_BITS) {}
-  inline fixed64_t(float f)
+  FIXBROT_INLINE fixed64_t(float f)
       : raw(static_cast<int64_t>(f * (1ull << FRAC_BITS))) {}
 
-  static inline fixed64_t from_raw(int64_t r) {
+  static FIXBROT_INLINE fixed64_t from_raw(int64_t r) {
     fixed64_t f;
     f.raw = r;
     return f;
   }
 
-  inline fixed64_t operator+(const fixed64_t &other) const {
+  FIXBROT_INLINE int int_part() const { return raw >> FRAC_BITS; }
+
+  FIXBROT_INLINE fixed64_t square() const {
+    uint64_t a = (raw < 0) ? -raw : raw;
+    a <<= (FIXED_INT_BITS / 2);
+    uint32_t al = (uint32_t)(a & 0xFFFFFFFF);
+    uint32_t ah = (uint32_t)(a >> 32);
+    uint64_t r0 = (uint64_t)al * al;
+    uint64_t r1 = (uint64_t)al * ah;
+    uint64_t r2 = (uint64_t)ah * ah;
+    uint64_t result = r2 + (((r1 << 1) + (r0 >> 32)) >> 32);
+    return fixed64_t::from_raw((int64_t)result);
+  }
+
+  FIXBROT_INLINE fixed64_t operator+(const fixed64_t &other) const {
     return fixed64_t::from_raw(raw + other.raw);
   }
 
-  inline fixed64_t operator-(const fixed64_t &other) const {
+  FIXBROT_INLINE fixed64_t operator-(const fixed64_t &other) const {
     return fixed64_t::from_raw(raw - other.raw);
   }
 
-  inline fixed64_t operator*(const int &other) const {
+  FIXBROT_INLINE fixed64_t operator*(const int &other) const {
     return fixed64_t::from_raw(raw * other);
   }
 
-  inline fixed64_t operator*(const short &other) const {
+  FIXBROT_INLINE fixed64_t operator*(const short &other) const {
     return fixed64_t::from_raw(raw * other);
   }
 
-  inline fixed64_t operator*(const fixed64_t &other) const {
+  FIXBROT_INLINE fixed64_t operator*(const fixed64_t &other) const {
     bool a_neg = (raw < 0);
     bool b_neg = (other.raw < 0);
     uint64_t a = a_neg ? -raw : raw;
@@ -65,48 +79,48 @@ struct fixed64_t {
     }
   }
 
-  inline bool is_fixed32() const { return (raw & 0xFFFFFFFF) == 0; }
-  inline explicit operator fixed32_t() {
+  FIXBROT_INLINE bool is_fixed32() const { return (raw & 0xFFFFFFFF) == 0; }
+  FIXBROT_INLINE explicit operator fixed32_t() {
     return fixed32_t::from_raw(raw >> 32);
   }
 };
 
-static inline fixed64_t operator+=(fixed64_t &a, const fixed64_t &b) {
+static FIXBROT_INLINE fixed64_t operator+=(fixed64_t &a, const fixed64_t &b) {
   a = a + b;
   return a;
 }
 
-static inline fixed64_t operator-=(fixed64_t &a, const fixed64_t &b) {
+static FIXBROT_INLINE fixed64_t operator-=(fixed64_t &a, const fixed64_t &b) {
   a = a - b;
   return a;
 }
 
-static inline fixed64_t operator*=(fixed64_t &a, const fixed64_t &b) {
+static FIXBROT_INLINE fixed64_t operator*=(fixed64_t &a, const fixed64_t &b) {
   a = a * b;
   return a;
 }
 
-static inline bool operator>(const fixed64_t &a, const fixed64_t &b) {
+static FIXBROT_INLINE bool operator>(const fixed64_t &a, const fixed64_t &b) {
   return a.raw > b.raw;
 }
 
-static inline bool operator<=(const fixed64_t &a, const fixed64_t &b) {
+static FIXBROT_INLINE bool operator<=(const fixed64_t &a, const fixed64_t &b) {
   return a.raw <= b.raw;
 }
 
-static inline bool operator<(const fixed64_t &a, const fixed64_t &b) {
+static FIXBROT_INLINE bool operator<(const fixed64_t &a, const fixed64_t &b) {
   return a.raw < b.raw;
 }
 
-static inline bool operator>=(const fixed64_t &a, const fixed64_t &b) {
+static FIXBROT_INLINE bool operator>=(const fixed64_t &a, const fixed64_t &b) {
   return a.raw >= b.raw;
 }
 
-static inline bool operator==(const fixed64_t &a, const fixed64_t &b) {
+static FIXBROT_INLINE bool operator==(const fixed64_t &a, const fixed64_t &b) {
   return a.raw == b.raw;
 }
 
-static inline bool operator!=(const fixed64_t &a, const fixed64_t &b) {
+static FIXBROT_INLINE bool operator!=(const fixed64_t &a, const fixed64_t &b) {
   return a.raw != b.raw;
 }
 

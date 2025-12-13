@@ -5,6 +5,8 @@
 #include <stdint.h>
 #endif
 
+#define FIXBROT_INLINE __attribute__((always_inline)) inline
+
 namespace fixbrot {
 
 static constexpr int FIXED_INT_BITS = 8;

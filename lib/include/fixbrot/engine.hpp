@@ -62,14 +62,12 @@ private:
     fixed64_t y = 0;
     fixed64_t xx = 0;
     fixed64_t yy = 0;
-    iter_t iter = 1;
-    fixed64_t four = fixed64_t(4);
-    while (iter < ITER_MAX && (xx + yy) <= four) {
+    iter_t iter = 0;
+    while (++iter < ITER_MAX && (xx + yy).int_part() < 4) {
       y = x * y * 2 + b;
       x = xx - yy + a;
-      xx = x * x;
-      yy = y * y;
-      iter++;
+      xx = x.square();
+      yy = y.square();
     }
     return iter;
   }
@@ -79,14 +77,12 @@ private:
     fixed32_t y = 0;
     fixed32_t xx = 0;
     fixed32_t yy = 0;
-    iter_t iter = 1;
-    fixed32_t four = fixed32_t(4);
-    while (iter < ITER_MAX && (xx + yy) <= four) {
+    iter_t iter = 0;
+    while (++iter < ITER_MAX && (xx + yy).int_part() < 4) {
       y = x * y * 2 + b;
       x = xx - yy + a;
-      xx = x * x;
-      yy = y * y;
-      iter++;
+      xx = x.square();
+      yy = y.square();
     }
     return iter;
   }
