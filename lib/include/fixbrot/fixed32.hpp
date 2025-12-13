@@ -5,7 +5,7 @@
 #include <stdint.h>
 #endif
 
-#include "fixbrot/common.hpp"
+#include "fixbrot/fixed_common.hpp"
 
 namespace fixbrot {
 

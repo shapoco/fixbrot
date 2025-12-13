@@ -13,10 +13,16 @@ using namespace fixbrot;
 
 uint64_t now_us = 0;
 App<WIDTH, HEIGHT> app;
+Engine<WIDTH, HEIGHT, WIDTH * 4, WIDTH * 4> engine0;
+Engine<WIDTH, HEIGHT, WIDTH * 4, WIDTH * 4> engine1;
+
+void core1_main();
 
 int main() {
   app.init();
   now_us = Time64();
+
+  Core1Exec(core1_main);
 
   while (True) {
     uint64_t last_us = now_us;
@@ -53,11 +59,20 @@ int main() {
       ResetToBootLoader();
     }
 
-    app.service(delta_us, keys);
+    if (app.service(delta_us, keys) != result_t::SUCCESS) {
+      LedFlip(LED1);
+    }
   }
 }
 
-result_t fixbrot::send_line(pos_t x, pos_t y, pos_t width, const col_t *data) {
+void core1_main() {
+  while (true) {
+    engine1.service();
+  }
+}
+
+result_t fixbrot::on_send_line(pos_t x, pos_t y, pos_t width,
+                               const col_t *data) {
   DispStartImg(x, x + width, y, y + 1);
   for (pos_t i = 0; i < width; i++) {
     DispSendImg2(data[i]);
@@ -66,6 +81,38 @@ result_t fixbrot::send_line(pos_t x, pos_t y, pos_t width, const col_t *data) {
   return result_t::SUCCESS;
 }
 
-void fixbrot::compute_started() { LedOn(LED1); }
+void fixbrot::on_render_start(scene_t &scene) {
+  LedOn(LED1);
+  engine0.init(scene);
+  engine1.init(scene);
+}
 
-void fixbrot::compute_finished(result_t res) { LedOff(LED1); }
+void fixbrot::on_render_finished(result_t res) { LedOff(LED1); }
+
+result_t fixbrot::on_iterate() { return engine0.service(); }
+
+result_t fixbrot::on_dispatch(const vec_t &loc) {
+  // if (engine0.load() <= engine1.load()) {
+  if ((loc.x + loc.y) & 1) {
+    return engine0.dispatch(loc);
+  } else {
+    return engine1.dispatch(loc);
+  }
+}
+
+bool fixbrot::on_collect(cell_t *resp) {
+  if (engine0.load() >= engine1.load()) {
+    if (engine0.collect(resp)) {
+      return true;
+    } else {
+      return engine1.collect(resp);
+    }
+  } else {
+    if (engine1.collect(resp)) {
+      return true;
+    } else {
+      return engine0.collect(resp);
+    }
+  }
+  return false;
+}
