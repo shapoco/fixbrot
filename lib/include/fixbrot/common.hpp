@@ -115,10 +115,8 @@ struct cell_t {
 };
 
 struct scene_t {
-    rect_t view;
   real_t re;
   real_t im;
-  int scale_exp;
   real_t step;
 };
 

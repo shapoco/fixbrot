@@ -27,7 +27,11 @@ public:
 
   uint16_t busy_items = 0;
 
-  scene_t scene;
+  real_t center_re = -0.5f;
+  real_t center_im = 0;
+  int16_t scale_exp = -2;
+  int16_t screen_size_clog2 = 0;
+  real_t pixel_step = 0;
 
   float scroll_accum_x = 0;
   float scroll_accum_y = 0;
@@ -37,18 +41,19 @@ public:
   App() {}
 
   result_t init() {
-    scene.re = -0.5f;
-    scene.im = 0;
-    scene.scale_exp = -2;
+    center_re = -0.5f;
+    center_im = 0;
+    scale_exp = -2;
+    screen_size_clog2 = 0;
     pos_t p = SCREEN_W > SCREEN_H ? SCREEN_W : SCREEN_H;
     while (p > 0) {
-      scene.scale_exp++;
+      screen_size_clog2++;
       p /= 2;
     }
-    scene.step = real_exp2(-scene.scale_exp);
+    update_pixel_step();
 
     FIXBROT_TRY(clear_rect(rect_t{0, 0, SCREEN_W, SCREEN_H}));
-    FIXBROT_TRY(start_render(rect_t{0, 0, SCREEN_W, SCREEN_H}));
+    FIXBROT_TRY(start_render());
     return result_t::SUCCESS;
   }
 
@@ -58,59 +63,31 @@ public:
         zoom_in();
       } else if ((keys & pad_t::ZOOM_OUT) && !(last_keys & pad_t::ZOOM_OUT)) {
         zoom_out();
-      } else {
-        if (keys & pad_t::UP) {
-          scroll_accum_y -= (float)delta_us * 0.0001f;
-        }
-        if (keys & pad_t::DOWN) {
-          scroll_accum_y += (float)delta_us * 0.0001f;
-        }
-        if (keys & pad_t::LEFT) {
-          scroll_accum_x -= (float)delta_us * 0.0001f;
-        }
-        if (keys & pad_t::RIGHT) {
-          scroll_accum_x += (float)delta_us * 0.0001f;
-        }
-
-        vec_t delta{0, 0};
-        if (scroll_accum_x >= 1.0f) {
-          delta.x = (pos_t)scroll_accum_x;
-          scroll_accum_x -= (float)delta.x;
-        } else if (scroll_accum_x <= -1.0f) {
-          delta.x = (pos_t)scroll_accum_x;
-          scroll_accum_x -= (float)delta.x;
-        }
-        if (scroll_accum_y >= 1.0f) {
-          delta.y = (pos_t)scroll_accum_y;
-          scroll_accum_y -= (float)delta.y;
-        } else if (scroll_accum_y <= -1.0f) {
-          delta.y = (pos_t)scroll_accum_y;
-          scroll_accum_y -= (float)delta.y;
-        }
-        if (delta.x != 0 || delta.y != 0) {
-          FIXBROT_TRY(scroll(delta));
-        }
+      } else if (keys &
+                 (pad_t::UP | pad_t::DOWN | pad_t::LEFT | pad_t::RIGHT)) {
+        scroll(delta_us, keys);
       }
     } else {
       FIXBROT_TRY(iterate());
 
-      // if (busy_items == 0) {
-      for (pos_t y = 0; y < SCREEN_H; y++) {
-        for (pos_t x = 0; x < SCREEN_W; x++) {
-          iter_t iter = work_buff[y * SCREEN_W + x];
-          if (iter < ITER_MAX) {
-            uint16_t gray = iter % 64;
-            if (gray >= 32) {
-              gray = 63 - gray;
+      if (busy_items == 0) {
+        // update display
+        for (pos_t y = 0; y < SCREEN_H; y++) {
+          for (pos_t x = 0; x < SCREEN_W; x++) {
+            iter_t iter = work_buff[y * SCREEN_W + x];
+            if (iter < ITER_MAX) {
+              uint16_t gray = iter % 64;
+              if (gray >= 32) {
+                gray = 63 - gray;
+              }
+              line_buff[x] = (gray << 11) | (gray << 6) | gray;
+            } else {
+              line_buff[x] = 0x0000;
             }
-            line_buff[x] = (gray << 11) | (gray << 6) | gray;
-          } else {
-            line_buff[x] = 0x0000;
           }
+          FIXBROT_TRY(on_send_line(0, y, SCREEN_W, line_buff));
         }
-        FIXBROT_TRY(on_send_line(0, y, SCREEN_W, line_buff));
       }
-      //}
     }
 
     last_keys = keys;
@@ -118,9 +95,45 @@ public:
   }
 
 private:
-  result_t scroll(vec_t delta) {
-    scene.re += scene.step * delta.x;
-    scene.im += scene.step * delta.y;
+  result_t scroll(uint32_t delta_us, pad_t keys) {
+    if (delta_us > 300 * 1000) {
+      delta_us = 300 * 1000;
+    }
+
+    if (keys & pad_t::LEFT && center_re > -2) {
+      scroll_accum_x -= (float)delta_us * 0.0001f;
+    }
+    if (keys & pad_t::RIGHT && center_re < 2) {
+      scroll_accum_x += (float)delta_us * 0.0001f;
+    }
+    if (keys & pad_t::UP && center_im > -2) {
+      scroll_accum_y -= (float)delta_us * 0.0001f;
+    }
+    if (keys & pad_t::DOWN && center_im < 2) {
+      scroll_accum_y += (float)delta_us * 0.0001f;
+    }
+
+    vec_t delta{0, 0};
+    if (scroll_accum_x <= -1.0f) {
+      delta.x = (pos_t)scroll_accum_x;
+      scroll_accum_x -= (float)delta.x;
+    } else if (scroll_accum_x >= 1.0f) {
+      delta.x = (pos_t)scroll_accum_x;
+      scroll_accum_x -= (float)delta.x;
+    }
+    if (scroll_accum_y <= -1.0f) {
+      delta.y = (pos_t)scroll_accum_y;
+      scroll_accum_y -= (float)delta.y;
+    } else if (scroll_accum_y >= 1.0f) {
+      delta.y = (pos_t)scroll_accum_y;
+      scroll_accum_y -= (float)delta.y;
+    }
+    if (delta.x == 0 && delta.y == 0) {
+      return result_t::SUCCESS;
+    }
+
+    center_re += pixel_step * delta.x;
+    center_im += pixel_step * delta.y;
 
     rect_t dest;
     dest.x = (delta.x >= 0) ? 0 : -delta.x;
@@ -166,7 +179,7 @@ private:
     }
 
     // render new area
-    FIXBROT_TRY(start_render({0, 0, SCREEN_W, SCREEN_H}));
+    FIXBROT_TRY(start_render());
     if (delta.x != 0) {
       pos_t x0 = (delta.x > 0) ? (dest.right() - 1) : dest.x;
       pos_t x1 = (delta.x > 0) ? dest.right() : (dest.x - 1);
@@ -182,48 +195,74 @@ private:
   }
 
   result_t zoom_in() {
-    scene.scale_exp++;
-    scene.step = real_exp2(-scene.scale_exp);
-    for (pos_t i = 0; i < SCREEN_H; i++) {
-      pos_t dy = (i < SCREEN_H / 2) ? i : (SCREEN_H * 3 / 2 - 1 - i);
-      pos_t sy = SCREEN_H / 4 + (dy / 2);
-      for (pos_t j = 0; j < SCREEN_W; j++) {
-        pos_t dx = (j < SCREEN_W / 2) ? j : (SCREEN_W * 3 / 2 - 1 - j);
-        pos_t sx = SCREEN_W / 4 + (dx / 2);
-        if ((dx & 1) == 0 && (dy & 1) == 0) {
-          work_buff[dy * SCREEN_W + dx] = work_buff[sy * SCREEN_W + sx];
-        } else {
-          work_buff[dy * SCREEN_W + dx] = ITER_BLANK;
+    scale_exp++;
+    bool last_is_fixed32 = pixel_step.is_fixed32();
+    update_pixel_step();
+    bool prec_changed = pixel_step.is_fixed32() != last_is_fixed32;
+
+    if (prec_changed) {
+      // clear all
+      FIXBROT_TRY(clear_rect(rect_t{0, 0, SCREEN_W, SCREEN_H}));
+    } else {
+      // upscale last image and reuse pixels
+      for (pos_t i = 0; i < SCREEN_H; i++) {
+        pos_t dy = (i < SCREEN_H / 2) ? i : (SCREEN_H * 3 / 2 - 1 - i);
+        pos_t sy = SCREEN_H / 4 + (dy / 2);
+        for (pos_t j = 0; j < SCREEN_W; j++) {
+          pos_t dx = (j < SCREEN_W / 2) ? j : (SCREEN_W * 3 / 2 - 1 - j);
+          pos_t sx = SCREEN_W / 4 + (dx / 2);
+          if ((dx & 1) == 0 && (dy & 1) == 0) {
+            work_buff[dy * SCREEN_W + dx] = work_buff[sy * SCREEN_W + sx];
+          } else {
+            work_buff[dy * SCREEN_W + dx] = ITER_BLANK;
+          }
         }
       }
     }
-    FIXBROT_TRY(start_render(rect_t{0, 0, SCREEN_W, SCREEN_H}));
+    FIXBROT_TRY(start_render());
     return result_t::SUCCESS;
   }
 
   result_t zoom_out() {
-    scene.scale_exp--;
-    scene.step = real_exp2(-scene.scale_exp);
-    for (pos_t i = 0; i < SCREEN_H; i++) {
-      pos_t dy = (i < SCREEN_H / 2) ? (SCREEN_H / 2 - 1 - i) : i;
-      pos_t sy = dy * 2 - SCREEN_H / 2;
-      for (pos_t j = 0; j < SCREEN_W; j++) {
-        pos_t dx = (j < SCREEN_W / 2) ? (SCREEN_W / 2 - 1 - j) : j;
-        pos_t sx = dx * 2 - SCREEN_W / 2;
-        if (0 <= sx && sx < SCREEN_W && 0 <= sy && sy < SCREEN_H) {
-          work_buff[dy * SCREEN_W + dx] = work_buff[sy * SCREEN_W + sx];
-        } else {
-          work_buff[dy * SCREEN_W + dx] = ITER_BLANK;
+    if (scale_exp <= -3) {
+      return result_t::SUCCESS;
+    }
+    scale_exp--;
+    bool last_is_fixed32 = pixel_step.is_fixed32();
+    update_pixel_step();
+    bool prec_changed = pixel_step.is_fixed32() != last_is_fixed32;
+
+    if (prec_changed) {
+      // clear all
+      FIXBROT_TRY(clear_rect(rect_t{0, 0, SCREEN_W, SCREEN_H}));
+      FIXBROT_TRY(start_render());
+    } else {
+      // downscale last image and reuse pixels
+      for (pos_t i = 0; i < SCREEN_H; i++) {
+        pos_t dy = (i < SCREEN_H / 2) ? (SCREEN_H / 2 - 1 - i) : i;
+        pos_t sy = dy * 2 - SCREEN_H / 2;
+        for (pos_t j = 0; j < SCREEN_W; j++) {
+          pos_t dx = (j < SCREEN_W / 2) ? (SCREEN_W / 2 - 1 - j) : j;
+          pos_t sx = dx * 2 - SCREEN_W / 2;
+          if (0 <= sx && sx < SCREEN_W && 0 <= sy && sy < SCREEN_H) {
+            work_buff[dy * SCREEN_W + dx] = work_buff[sy * SCREEN_W + sx];
+          } else {
+            work_buff[dy * SCREEN_W + dx] = ITER_BLANK;
+          }
         }
       }
+      FIXBROT_TRY(start_render());
+      rect_t rect{SCREEN_W / 4, SCREEN_H / 4, SCREEN_W / 2, SCREEN_H / 2};
+      scan_vertical(rect.x, rect.x - 1, rect.y, rect.h);
+      scan_vertical(rect.right() - 1, rect.right(), rect.y, rect.h);
+      scan_horizontal(rect.x, rect.y, rect.y - 1, rect.w);
+      scan_horizontal(rect.x, rect.bottom() - 1, rect.bottom(), rect.w);
     }
-    FIXBROT_TRY(start_render(rect_t{0, 0, SCREEN_W, SCREEN_H}));
-    rect_t rect{SCREEN_W / 4, SCREEN_H / 4, SCREEN_W / 2, SCREEN_H / 2};
-    scan_vertical(rect.x, rect.x - 1, rect.y, rect.h);
-    scan_vertical(rect.right() - 1, rect.right(), rect.y, rect.h);
-    scan_horizontal(rect.x, rect.y, rect.y - 1, rect.w);
-    scan_horizontal(rect.x, rect.bottom() - 1, rect.bottom(), rect.w);
     return result_t::SUCCESS;
+  }
+
+  void update_pixel_step() {
+    pixel_step = real_exp2(-scale_exp - screen_size_clog2);
   }
 
   result_t scan_vertical(pos_t x0, pos_t x1, pos_t y0, pos_t h) {
@@ -261,25 +300,24 @@ private:
     return result_t::SUCCESS;
   }
 
-  result_t start_render(rect_t view) {
+  result_t start_render() {
     if (busy_items > 0) {
       return result_t::ERROR_BUSY;
     }
+
+    scene_t scene;
+    scene.re = center_re - pixel_step * (SCREEN_W / 2);
+    scene.im = center_im - pixel_step * (SCREEN_H / 2);
+    scene.step = pixel_step;
     on_render_start(scene);
 
-    scene.view = view;
-
-    for (pos_t x = view.x; x < view.x + view.w; x++) {
-      enqueue(vec_t{x, view.y});
-      if (view.h >= 2) {
-        enqueue(vec_t{x, (pos_t)(view.y + view.h - 1)});
-      }
+    for (pos_t x = 0; x < SCREEN_W; x++) {
+      enqueue(vec_t{x, 0});
+      enqueue(vec_t{x, (pos_t)(SCREEN_H - 1)});
     }
-    for (pos_t y = view.y + 1; y < view.y + view.h - 1; y++) {
-      enqueue(vec_t{view.x, y});
-      if (view.w >= 2) {
-        enqueue(vec_t{(pos_t)(view.x + view.w - 1), y});
-      }
+    for (pos_t y = 1; y < SCREEN_H - 1; y++) {
+      enqueue(vec_t{0, y});
+      enqueue(vec_t{(pos_t)(SCREEN_W - 1), y});
     }
     return result_t::SUCCESS;
   }
@@ -318,12 +356,11 @@ private:
     }
 
     if (busy_items == 0) {
-      rect_t &view = scene.view;
-      iter_t *line_ptr = work_buff + (view.y * SCREEN_W + view.x);
-      for (pos_t y = view.y; y < view.y + view.h; y++) {
+      iter_t *line_ptr = work_buff;
+      for (pos_t y = 0; y < SCREEN_H; y++) {
         iter_t *ptr = line_ptr;
         iter_t last = 1;
-        for (pos_t x = view.x; x < view.x + view.w; x++) {
+        for (pos_t x = 0; x < SCREEN_W; x++) {
           iter_t iter = *ptr;
           if (iter == ITER_BLANK) {
             *ptr = last;
@@ -344,7 +381,7 @@ private:
   inline cell_t get_cell(pos_t x, pos_t y) {
     vec_t loc{x, y};
     cell_t cell;
-    if (scene.view.contains(loc)) {
+    if (0 <= x && x < SCREEN_W && 0 <= y && y < SCREEN_H) {
       cell.loc = loc;
       cell.iter = work_buff[y * SCREEN_W + x];
     } else {

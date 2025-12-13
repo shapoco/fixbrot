@@ -11,13 +11,8 @@
 
 namespace fixbrot {
 
-template <pos_t prm_WIDTH, pos_t prm_HEIGHT, uint16_t prm_REQ_QUEUE_DEPTH,
-          uint16_t prm_RESP_QUEUE_DEPTH>
+template <uint16_t prm_REQ_QUEUE_DEPTH, uint16_t prm_RESP_QUEUE_DEPTH>
 class Engine {
-public:
-  static constexpr pos_t SCREEN_W = prm_WIDTH;
-  static constexpr pos_t SCREEN_H = prm_HEIGHT;
-
 private:
   ArrayQueue<vec_t, prm_REQ_QUEUE_DEPTH> req_queue;
   ArrayQueue<cell_t, prm_RESP_QUEUE_DEPTH> resp_queue;
@@ -42,8 +37,8 @@ public:
       if (!req_queue.dequeue(&loc)) {
         break;
       }
-      real_t re = scene.re + scene.step * (loc.x - SCREEN_W / 2);
-      real_t im = scene.im + scene.step * (loc.y - SCREEN_H / 2);
+      real_t re = scene.re + scene.step * loc.x;
+      real_t im = scene.im + scene.step * loc.y;
 
       cell_t resp;
       resp.loc = loc;

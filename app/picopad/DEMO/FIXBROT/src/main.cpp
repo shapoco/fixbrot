@@ -13,8 +13,8 @@ using namespace fixbrot;
 
 uint64_t now_us = 0;
 App<WIDTH, HEIGHT> app;
-Engine<WIDTH, HEIGHT, WIDTH * 4, WIDTH * 4> engine0;
-Engine<WIDTH, HEIGHT, WIDTH * 4, WIDTH * 4> engine1;
+Engine<WIDTH * 4, WIDTH * 4> engine0;
+Engine<WIDTH * 4, WIDTH * 4> engine1;
 
 void core1_main();
 
@@ -93,8 +93,6 @@ result_t fixbrot::on_iterate() { return engine0.service(); }
 
 static bool use_engine0 = true;
 result_t fixbrot::on_dispatch(const vec_t &loc) {
-  // if (engine0.load() <= engine1.load()) {
-  // if ((loc.x  + loc.y) & 1) {
   if (use_engine0) {
     return engine0.dispatch(loc);
   } else {
