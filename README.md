@@ -1,6 +1,8 @@
 # FixBrot
 
-Mandelbrot Viewer for [PicoPad](https://github.com/pajenicko/picopad).
+Mandelbrot Viewer for [PicoPad](https://github.com/pajenicko/picopad) with Border Tracing Algorithm.
+
+https://github.com/user-attachments/assets/04b31c8e-c4cc-4e2c-9aa6-9185a7eabbc5
 
 ## Key Assign
 
