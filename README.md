@@ -2,6 +2,18 @@
 
 Mandelbrot Viewer for [PicoPad](https://github.com/pajenicko/picopad).
 
+## Key Assign
+
+|Key|Funcion|
+|:--|:--|
+|←→↑↓|scroll|
+|A|zoom in|
+|B|zoom out|
+|X + ↑|increse iteration count|
+|X + ↓|decrese iteration count|
+|X + →|change palette|
+|Y|quit|
+
 ## How to Build (Linux/WSL2)
 
 ```sh

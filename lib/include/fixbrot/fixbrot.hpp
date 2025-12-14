@@ -18,8 +18,13 @@ result_t on_dispatch(const vec_t &req);
 bool on_collect(cell_t *resp);
 result_t on_send_line(pos_t x, pos_t y, pos_t width, const col_t *data);
 
-template <uint16_t prm_WIDTH, uint16_t prm_HEIGHT> class App {
-public:
+static inline uint16_t pack565(uint8_t r, uint8_t g, uint8_t b) {
+  return ((uint16_t)r << 11) | ((uint16_t)g << 5) | b;
+}
+
+template <uint16_t prm_WIDTH, uint16_t prm_HEIGHT>
+class App {
+ public:
   static constexpr pos_t SCREEN_W = prm_WIDTH;
   static constexpr pos_t SCREEN_H = prm_HEIGHT;
   static constexpr int16_t SCALING_ANIMATION_DURATION_MS = 300;
@@ -39,6 +44,7 @@ public:
   int16_t scaling_animation_ms = 0;
   float scroll_accum_x = 0;
   float scroll_accum_y = 0;
+  palette_t palette = palette_t::HEAT_MAP;
 
   input_t last_keys = input_t::NONE;
 
@@ -76,6 +82,8 @@ public:
         FIXBROT_TRY(set_max_iter(max_iter + 100));
       } else if (!!(down_keys & input_t::ITER_DEC)) {
         FIXBROT_TRY(set_max_iter(max_iter - 100));
+      } else if (!!(down_keys & input_t::PALETTE_CHANGE)) {
+        FIXBROT_TRY(change_palette());
       }
     } else {
       FIXBROT_TRY(iterate());
@@ -132,14 +140,8 @@ public:
             line_buff[x] = 0x0000;
           } else if (iter == ITER_QUEUED) {
             line_buff[x] = 0xFFE0;
-          } else if (iter < max_iter) {
-            uint16_t gray = iter % 64;
-            if (gray >= 32) {
-              gray = 63 - gray;
-            }
-            line_buff[x] = (gray << 11) | (gray << 6) | gray;
           } else {
-            line_buff[x] = 0x0000;
+            line_buff[x] = get_color(iter);
           }
         }
         FIXBROT_TRY(on_send_line(0, y, SCREEN_W, line_buff));
@@ -150,7 +152,7 @@ public:
     return result_t::SUCCESS;
   }
 
-private:
+ private:
   result_t scroll(uint32_t delta_us, input_t keys) {
     if (delta_us > 300 * 1000) {
       delta_us = 300 * 1000;
@@ -345,15 +347,21 @@ private:
           }
         }
       }
-      for (pos_t y0 = 4; y0 < SCREEN_H - 1; y0 += 8) {
+      for (pos_t y0 = 8; y0 < SCREEN_H - 1; y0 += 16) {
         pos_t y1 = y0 + 1;
-        FIXBROT_TRY(scan_hori(0, y0, y1, SCREEN_W));
-        FIXBROT_TRY(scan_hori(0, y1, y0, SCREEN_W));
+        if (y0 < SCREEN_H / 2) {
+          FIXBROT_TRY(scan_hori(0, y0, y1, SCREEN_W));
+        } else {
+          FIXBROT_TRY(scan_hori(0, y1, y0, SCREEN_W));
+        }
       }
-      for (pos_t x0 = 4; x0 < SCREEN_W - 1; x0 += 8) {
+      for (pos_t x0 = 8; x0 < SCREEN_W - 1; x0 += 16) {
         pos_t x1 = x0 + 1;
-        FIXBROT_TRY(scan_vert(x0, x1, 0, SCREEN_H));
-        FIXBROT_TRY(scan_vert(x1, x0, 0, SCREEN_H));
+        if (x0 < SCREEN_W / 2) {
+          FIXBROT_TRY(scan_vert(x0, x1, 0, SCREEN_H));
+        } else {
+          FIXBROT_TRY(scan_vert(x1, x0, 0, SCREEN_H));
+        }
       }
     }
     repaint_requested = true;
@@ -560,8 +568,76 @@ private:
       return false;
     }
   }
+
+  result_t change_palette() {
+    palette = static_cast<palette_t>((static_cast<uint8_t>(palette) + 1) %
+                                     static_cast<uint8_t>(palette_t::LAST));
+    repaint_requested = true;
+    return result_t::SUCCESS;
+  }
+
+  col_t get_color(iter_t iter) {
+    switch (palette) {
+      case palette_t::HEAT_MAP: {
+        if (iter < ITER_MAX) {
+          int i = iter % (32 * 6);
+          int coarse = i / 32;
+          int fine = i % 32;
+          switch (coarse) {
+            case 0: return pack565(0, fine / 2, fine);
+            case 1: return pack565(0, 16 + fine, 31);
+            case 2: return pack565(fine, 48 + fine / 2, 31);
+            case 3: return pack565(31, 63 - fine / 2, 31 - fine);
+            case 4: return pack565(31, 47 - fine, 0);
+            default: return pack565(31 - fine, 15 - fine / 2, 0);
+          }
+        } else {
+          return 0x0000;
+        }
+      } break;
+
+      case palette_t::RAINBOW: {
+        if (iter < ITER_MAX) {
+          int hue = iter % (64 * 6);
+          int coarse = hue / 64;
+          int fine = hue % 64;
+          uint8_t r = 0, g = 0, b = 0;
+          switch (coarse) {
+            case 0: return pack565(31, fine, 0);
+            case 1: return pack565(31 - (fine / 2), 63, 0);
+            case 2: return pack565(0, 63, fine / 2);
+            case 3: return pack565(0, 63 - fine, 31);
+            case 4: return pack565(fine / 2, 0, 31);
+            default: return pack565(31, 0, 31 - fine / 2);
+          }
+        } else {
+          return 0x0000;
+        }
+      } break;
+
+      case palette_t::GRAY: {
+        if (iter < ITER_MAX) {
+          uint16_t gray = iter % 64;
+          if (gray >= 32) {
+            gray = 63 - gray;
+          }
+          return (gray << 11) | (gray << 6) | gray;
+        } else {
+          return 0x0000;
+        }
+      } break;
+
+      default: {
+        if (iter < ITER_MAX) {
+          return (iter % 2 == 0) ? 0xFFFF : 0x0000;
+        } else {
+          return 0x0000;
+        }
+      } break;
+    }
+  }
 };
 
-} // namespace fixbrot
+}  // namespace fixbrot
 
 #endif

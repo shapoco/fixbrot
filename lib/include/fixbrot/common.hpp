@@ -130,6 +130,14 @@ struct scene_t {
   iter_t max_iter;
 };
 
+enum class palette_t {
+  HEAT_MAP,
+  RAINBOW,
+  GRAY,
+  BLACK_AND_WHITE,
+  LAST,
+};
+
 } // namespace fixbrot
 
 #endif
