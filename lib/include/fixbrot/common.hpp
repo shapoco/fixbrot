@@ -24,33 +24,42 @@ enum class result_t : uint16_t {
     }                                                                          \
   } while (0)
 
-enum class pad_t : uint16_t {
+enum class input_t : uint16_t {
   NONE = 0,
-  UP = (1 << 0),
-  DOWN = (1 << 1),
-  LEFT = (1 << 2),
-  RIGHT = (1 << 3),
+  SCROLL_LEFT = (1 << 0),
+  SCROLL_RIGHT = (1 << 1),
+  SCROLL_UP = (1 << 2),
+  SCROLL_DOWN = (1 << 3),
   ZOOM_IN = (1 << 4),
   ZOOM_OUT = (1 << 5),
-  X = (1 << 6),
-  Y = (1 << 7),
+  ITER_INC = (1 << 6),
+  ITER_DEC = (1 << 7),
+  PALETTE_CHANGE = (1 << 8),
+  SCROLL_MASK = SCROLL_UP | SCROLL_DOWN | SCROLL_LEFT | SCROLL_RIGHT,
 };
 
-static inline bool operator&(pad_t a, pad_t b) {
-  return (static_cast<uint16_t>(a) & static_cast<uint16_t>(b)) != 0;
+static inline input_t operator&(input_t a, input_t b) {
+  return static_cast<input_t>(static_cast<uint16_t>(a) &
+                              static_cast<uint16_t>(b));
 }
-static inline pad_t operator|(pad_t a, pad_t b) {
-  return static_cast<pad_t>(static_cast<uint16_t>(a) |
-                            static_cast<uint16_t>(b));
+static inline input_t operator|(input_t a, input_t b) {
+  return static_cast<input_t>(static_cast<uint16_t>(a) |
+                              static_cast<uint16_t>(b));
 }
-static inline pad_t &operator|=(pad_t &a, pad_t b) { return (a = a | b); }
+static inline input_t operator~(input_t a) {
+  return static_cast<input_t>(~static_cast<uint16_t>(a));
+}
+static inline input_t &operator|=(input_t &a, input_t b) { return (a = a | b); }
+static inline bool operator!(input_t a) {
+  return static_cast<uint16_t>(a) == 0;
+}
 
 enum class precision_t : uint8_t {
   FIXED32,
   FIXED64,
 };
 
-using iter_t = uint8_t;
+using iter_t = uint16_t;
 using pos_t = int16_t;
 using col_t = uint16_t;
 
@@ -115,9 +124,10 @@ struct cell_t {
 };
 
 struct scene_t {
-  real_t re;
-  real_t im;
+  real_t real;
+  real_t imag;
   real_t step;
+  iter_t max_iter;
 };
 
 } // namespace fixbrot

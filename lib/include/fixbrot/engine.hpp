@@ -37,8 +37,8 @@ public:
       if (!req_queue.dequeue(&loc)) {
         break;
       }
-      real_t re = scene.re + scene.step * loc.x;
-      real_t im = scene.im + scene.step * loc.y;
+      real_t re = scene.real + scene.step * loc.x;
+      real_t im = scene.imag + scene.step * loc.y;
 
       cell_t resp;
       resp.loc = loc;
@@ -50,6 +50,9 @@ public:
         fixed64_t a = re;
         fixed64_t b = im;
         resp.iter = mandelbrot64(a, b);
+      }
+      if (resp.iter == scene.max_iter) {
+        resp.iter = ITER_MAX;
       }
       FIXBROT_TRY(resp_queue.enqueue(resp));
     }
@@ -63,7 +66,7 @@ private:
     fixed64_t xx = 0;
     fixed64_t yy = 0;
     iter_t iter = 0;
-    while (++iter < ITER_MAX && (xx + yy).int_part() < 4) {
+    while (++iter < scene.max_iter && (xx + yy).int_part() < 4) {
       y = x * y * 2 + b;
       x = xx - yy + a;
       xx = x.square();
@@ -78,7 +81,7 @@ private:
     fixed32_t xx = 0;
     fixed32_t yy = 0;
     iter_t iter = 0;
-    while (++iter < ITER_MAX && (xx + yy).int_part() < 4) {
+    while (++iter < scene.max_iter && (xx + yy).int_part() < 4) {
       y = x * y * 2 + b;
       x = xx - yy + a;
       xx = x.square();

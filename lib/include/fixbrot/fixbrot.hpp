@@ -22,6 +22,7 @@ template <uint16_t prm_WIDTH, uint16_t prm_HEIGHT> class App {
 public:
   static constexpr pos_t SCREEN_W = prm_WIDTH;
   static constexpr pos_t SCREEN_H = prm_HEIGHT;
+  static constexpr int16_t SCALING_ANIMATION_DURATION_MS = 300;
   col_t line_buff[SCREEN_W];
   iter_t work_buff[SCREEN_W * SCREEN_H];
 
@@ -32,11 +33,16 @@ public:
   int16_t scale_exp = -2;
   int16_t screen_size_clog2 = 0;
   real_t pixel_step = 0;
+  iter_t max_iter = 200;
+  uint32_t iter_accum = 0;
 
+  int16_t scaling_animation_ms = 0;
   float scroll_accum_x = 0;
   float scroll_accum_y = 0;
 
-  pad_t last_keys = pad_t::NONE;
+  input_t last_keys = input_t::NONE;
+
+  bool repaint_requested = false;
 
   App() {}
 
@@ -57,36 +63,86 @@ public:
     return result_t::SUCCESS;
   }
 
-  result_t service(uint32_t delta_us, pad_t keys) {
+  result_t service(uint32_t delta_us, input_t keys) {
+    input_t down_keys = keys & (~last_keys);
     if (busy_items == 0) {
-      if ((keys & pad_t::ZOOM_IN) && !(last_keys & pad_t::ZOOM_IN)) {
-        zoom_in();
-      } else if ((keys & pad_t::ZOOM_OUT) && !(last_keys & pad_t::ZOOM_OUT)) {
-        zoom_out();
-      } else if (keys &
-                 (pad_t::UP | pad_t::DOWN | pad_t::LEFT | pad_t::RIGHT)) {
-        scroll(delta_us, keys);
+      if (!!(keys & input_t::SCROLL_MASK)) {
+        FIXBROT_TRY(scroll(delta_us, keys));
+      } else if (!!(down_keys & input_t::ZOOM_IN)) {
+        FIXBROT_TRY(zoom_in());
+      } else if (!!(down_keys & input_t::ZOOM_OUT)) {
+        FIXBROT_TRY(zoom_out());
+      } else if (!!(down_keys & input_t::ITER_INC)) {
+        FIXBROT_TRY(set_max_iter(max_iter + 100));
+      } else if (!!(down_keys & input_t::ITER_DEC)) {
+        FIXBROT_TRY(set_max_iter(max_iter - 100));
       }
     } else {
       FIXBROT_TRY(iterate());
+    }
 
-      if (busy_items == 0) {
-        // update display
-        for (pos_t y = 0; y < SCREEN_H; y++) {
-          for (pos_t x = 0; x < SCREEN_W; x++) {
-            iter_t iter = work_buff[y * SCREEN_W + x];
-            if (iter < ITER_MAX) {
-              uint16_t gray = iter % 64;
-              if (gray >= 32) {
-                gray = 63 - gray;
-              }
-              line_buff[x] = (gray << 11) | (gray << 6) | gray;
-            } else {
-              line_buff[x] = 0x0000;
-            }
-          }
-          FIXBROT_TRY(on_send_line(0, y, SCREEN_W, line_buff));
+    if (repaint_requested) {
+      repaint_requested = false;
+
+      int16_t scaling = 256;
+      if (scaling_animation_ms > 0) {
+        scaling_animation_ms -= delta_us / 1000;
+        if (scaling_animation_ms < 0) {
+          scaling_animation_ms = 0;
         }
+        scaling = 256 + (int32_t)scaling_animation_ms * 256 /
+                            SCALING_ANIMATION_DURATION_MS;
+        repaint_requested = true;
+      } else if (scaling_animation_ms < 0) {
+        scaling_animation_ms += delta_us / 1000;
+        if (scaling_animation_ms > 0) {
+          scaling_animation_ms = 0;
+        }
+        scaling = 256 + (int32_t)scaling_animation_ms * 128 /
+                            SCALING_ANIMATION_DURATION_MS;
+        repaint_requested = true;
+      }
+
+      for (pos_t y = 0; y < SCREEN_H; y++) {
+        pos_t sy = y;
+        if (scaling_animation_ms != 0) {
+          sy = (int32_t)(y - SCREEN_H / 2) * scaling / 256 + (SCREEN_H / 2);
+        }
+        if (scaling_animation_ms > 0) {
+          sy = (sy / 2) * 2;
+        }
+
+        for (pos_t x = 0; x < SCREEN_W; x++) {
+          pos_t sx = x;
+          if (scaling_animation_ms != 0) {
+            sx = (int32_t)(x - SCREEN_W / 2) * scaling / 256 + (SCREEN_W / 2);
+          }
+
+          if (sx < 0 || sx >= SCREEN_W || sy < 0 || sy >= SCREEN_H) {
+            line_buff[x] = 0x0000;
+            continue;
+          }
+
+          if (scaling_animation_ms > 0) {
+            sx = (sx / 2) * 2;
+          }
+
+          iter_t iter = work_buff[sy * SCREEN_W + sx];
+          if (iter == ITER_BLANK) {
+            line_buff[x] = 0x0000;
+          } else if (iter == ITER_QUEUED) {
+            line_buff[x] = 0xFFE0;
+          } else if (iter < max_iter) {
+            uint16_t gray = iter % 64;
+            if (gray >= 32) {
+              gray = 63 - gray;
+            }
+            line_buff[x] = (gray << 11) | (gray << 6) | gray;
+          } else {
+            line_buff[x] = 0x0000;
+          }
+        }
+        FIXBROT_TRY(on_send_line(0, y, SCREEN_W, line_buff));
       }
     }
 
@@ -95,21 +151,21 @@ public:
   }
 
 private:
-  result_t scroll(uint32_t delta_us, pad_t keys) {
+  result_t scroll(uint32_t delta_us, input_t keys) {
     if (delta_us > 300 * 1000) {
       delta_us = 300 * 1000;
     }
 
-    if (keys & pad_t::LEFT && center_re > -2) {
+    if (!!(keys & input_t::SCROLL_LEFT) && center_re > -2) {
       scroll_accum_x -= (float)delta_us * 0.0001f;
     }
-    if (keys & pad_t::RIGHT && center_re < 2) {
+    if (!!(keys & input_t::SCROLL_RIGHT) && center_re < 2) {
       scroll_accum_x += (float)delta_us * 0.0001f;
     }
-    if (keys & pad_t::UP && center_im > -2) {
+    if (!!(keys & input_t::SCROLL_UP) && center_im > -2) {
       scroll_accum_y -= (float)delta_us * 0.0001f;
     }
-    if (keys & pad_t::DOWN && center_im < 2) {
+    if (!!(keys & input_t::SCROLL_DOWN) && center_im < 2) {
       scroll_accum_y += (float)delta_us * 0.0001f;
     }
 
@@ -183,12 +239,12 @@ private:
     if (delta.x != 0) {
       pos_t x0 = (delta.x > 0) ? (dest.right() - 1) : dest.x;
       pos_t x1 = (delta.x > 0) ? dest.right() : (dest.x - 1);
-      scan_vertical(x0, x1, dest.y, dest.h);
+      FIXBROT_TRY(scan_vert(x0, x1, dest.y, dest.h));
     }
     if (delta.y != 0) {
       pos_t y0 = (delta.y > 0) ? (dest.bottom() - 1) : dest.y;
       pos_t y1 = (delta.y > 0) ? dest.bottom() : (dest.y - 1);
-      scan_horizontal(dest.x, y0, y1, dest.w);
+      FIXBROT_TRY(scan_hori(dest.x, y0, y1, dest.w));
     }
 
     return result_t::SUCCESS;
@@ -220,6 +276,10 @@ private:
       }
     }
     FIXBROT_TRY(start_render());
+
+    scaling_animation_ms = SCALING_ANIMATION_DURATION_MS;
+    repaint_requested = true;
+
     return result_t::SUCCESS;
   }
 
@@ -253,11 +313,50 @@ private:
       }
       FIXBROT_TRY(start_render());
       rect_t rect{SCREEN_W / 4, SCREEN_H / 4, SCREEN_W / 2, SCREEN_H / 2};
-      scan_vertical(rect.x, rect.x - 1, rect.y, rect.h);
-      scan_vertical(rect.right() - 1, rect.right(), rect.y, rect.h);
-      scan_horizontal(rect.x, rect.y, rect.y - 1, rect.w);
-      scan_horizontal(rect.x, rect.bottom() - 1, rect.bottom(), rect.w);
+      FIXBROT_TRY(scan_vert(rect.x, rect.x - 1, rect.y, rect.h));
+      FIXBROT_TRY(scan_vert(rect.right() - 1, rect.right(), rect.y, rect.h));
+      FIXBROT_TRY(scan_hori(rect.x, rect.y, rect.y - 1, rect.w));
+      FIXBROT_TRY(scan_hori(rect.x, rect.bottom() - 1, rect.bottom(), rect.w));
     }
+
+    scaling_animation_ms = -SCALING_ANIMATION_DURATION_MS;
+    repaint_requested = true;
+
+    return result_t::SUCCESS;
+  }
+
+  result_t set_max_iter(iter_t max_iter) {
+    if (max_iter < 100) {
+      max_iter = 100;
+    } else if (max_iter > ITER_MAX) {
+      max_iter = ITER_MAX;
+    }
+    if (this->max_iter == max_iter) {
+      return result_t::SUCCESS;
+    }
+    bool increasing = (max_iter > this->max_iter);
+    this->max_iter = max_iter;
+    if (increasing) {
+      FIXBROT_TRY(start_render());
+      for (pos_t y = 1; y < SCREEN_H - 1; y++) {
+        for (pos_t x = 1; x < SCREEN_W - 1; x++) {
+          if (work_buff[y * SCREEN_W + x] == ITER_MAX) {
+            work_buff[y * SCREEN_W + x] = ITER_BLANK;
+          }
+        }
+      }
+      for (pos_t y0 = 4; y0 < SCREEN_H - 1; y0 += 8) {
+        pos_t y1 = y0 + 1;
+        FIXBROT_TRY(scan_hori(0, y0, y1, SCREEN_W));
+        FIXBROT_TRY(scan_hori(0, y1, y0, SCREEN_W));
+      }
+      for (pos_t x0 = 4; x0 < SCREEN_W - 1; x0 += 8) {
+        pos_t x1 = x0 + 1;
+        FIXBROT_TRY(scan_vert(x0, x1, 0, SCREEN_H));
+        FIXBROT_TRY(scan_vert(x1, x0, 0, SCREEN_H));
+      }
+    }
+    repaint_requested = true;
     return result_t::SUCCESS;
   }
 
@@ -265,7 +364,7 @@ private:
     pixel_step = real_exp2(-scale_exp - screen_size_clog2);
   }
 
-  result_t scan_vertical(pos_t x0, pos_t x1, pos_t y0, pos_t h) {
+  result_t scan_vert(pos_t x0, pos_t x1, pos_t y0, pos_t h) {
     cell_t a = get_cell(x0, y0);
     cell_t c = get_cell(x1, y0);
     for (pos_t y = y0; y < y0 + h - 1; y++) {
@@ -278,7 +377,7 @@ private:
     return result_t::SUCCESS;
   }
 
-  result_t scan_horizontal(pos_t x0, pos_t y0, pos_t y1, pos_t w) {
+  result_t scan_hori(pos_t x0, pos_t y0, pos_t y1, pos_t w) {
     cell_t a = get_cell(x0, y0);
     cell_t c = get_cell(x0, y1);
     for (pos_t x = x0; x < x0 + w - 1; x++) {
@@ -306,9 +405,10 @@ private:
     }
 
     scene_t scene;
-    scene.re = center_re - pixel_step * (SCREEN_W / 2);
-    scene.im = center_im - pixel_step * (SCREEN_H / 2);
+    scene.real = center_re - pixel_step * (SCREEN_W / 2);
+    scene.imag = center_im - pixel_step * (SCREEN_H / 2);
     scene.step = pixel_step;
+    scene.max_iter = max_iter;
     on_render_start(scene);
 
     for (pos_t x = 0; x < SCREEN_W; x++) {
@@ -319,6 +419,9 @@ private:
       enqueue(vec_t{0, y});
       enqueue(vec_t{(pos_t)(SCREEN_W - 1), y});
     }
+
+    iter_accum = 0;
+
     return result_t::SUCCESS;
   }
 
@@ -333,6 +436,11 @@ private:
       cell_t c;
       if (!dequeue(&c)) {
         break;
+      }
+      if (c.iter == ITER_MAX) {
+        iter_accum += max_iter;
+      } else {
+        iter_accum += c.iter;
       }
       pos_t x = c.loc.x;
       pos_t y = c.loc.y;
@@ -353,6 +461,19 @@ private:
       FIXBROT_TRY(compare(c, r, u, ru));
       FIXBROT_TRY(compare(c, l, d, ld));
       FIXBROT_TRY(compare(c, r, d, rd));
+
+      uint32_t iter_thresh = SCREEN_W * SCREEN_H;
+      if (scaling_animation_ms != 0) {
+        iter_thresh /= 2;
+      }
+      if (pixel_step.is_fixed32()) {
+        iter_thresh *= 2;
+      }
+      if (iter_accum >= iter_thresh) {
+        iter_accum = 0;
+        repaint_requested = true;
+        break;
+      }
     }
 
     if (busy_items == 0) {
@@ -374,6 +495,7 @@ private:
       }
 
       on_render_finished(result_t::SUCCESS);
+      repaint_requested = true;
     }
 
     return result_t::SUCCESS;

@@ -5,9 +5,11 @@
 using namespace fixbrot;
 
 uint64_t now_us = 0;
+bool ctrl_pressed = false;
+
 App<WIDTH, HEIGHT> app;
-Engine<WIDTH * 4, WIDTH * 4> engine0;
-Engine<WIDTH * 4, WIDTH * 4> engine1;
+Engine<WIDTH * 8, WIDTH * 8> engine0;
+Engine<WIDTH * 8, WIDTH * 8> engine1;
 
 uint64_t t_start = 0;
 uint64_t t_elapsed = 0;
@@ -25,33 +27,49 @@ int main() {
     now_us = Time64();
     uint32_t delta_us = (uint32_t)(now_us - last_us);
 
-    pad_t keys = pad_t::NONE;
-    if (KeyPressedFast(KEY_DOWN)) {
-      keys |= pad_t::DOWN;
-    }
-    if (KeyPressedFast(KEY_UP)) {
-      keys |= pad_t::UP;
-    }
-    if (KeyPressedFast(KEY_LEFT)) {
-      keys |= pad_t::LEFT;
-    }
-    if (KeyPressedFast(KEY_RIGHT)) {
-      keys |= pad_t::RIGHT;
-    }
-    if (KeyPressedFast(KEY_A)) {
-      keys |= pad_t::ZOOM_IN;
-    }
-    if (KeyPressedFast(KEY_B)) {
-      keys |= pad_t::ZOOM_OUT;
-    }
-    if (KeyPressedFast(KEY_X)) {
-      keys |= pad_t::X;
-    }
-    if (KeyPressedFast(KEY_Y)) {
-      keys |= pad_t::Y;
+    input_t keys = input_t::NONE;
+    if (ctrl_pressed) {
+      if (KeyPressedFast(KEY_LEFT)) {
+        // nothing
+      }
+      if (KeyPressedFast(KEY_RIGHT)) {
+        keys |= input_t::PALETTE_CHANGE;
+      }
+      if (KeyPressedFast(KEY_DOWN)) {
+        keys |= input_t::ITER_DEC;
+      }
+      if (KeyPressedFast(KEY_UP)) {
+        keys |= input_t::ITER_INC;
+      }
+    } else {
+      if (KeyPressedFast(KEY_LEFT)) {
+        keys |= input_t::SCROLL_LEFT;
+      }
+      if (KeyPressedFast(KEY_RIGHT)) {
+        keys |= input_t::SCROLL_RIGHT;
+      }
+      if (KeyPressedFast(KEY_DOWN)) {
+        keys |= input_t::SCROLL_DOWN;
+      }
+      if (KeyPressedFast(KEY_UP)) {
+        keys |= input_t::SCROLL_UP;
+      }
     }
 
-    if (keys & pad_t::Y) {
+    if (KeyPressedFast(KEY_A)) {
+      keys |= input_t::ZOOM_IN;
+    }
+    if (KeyPressedFast(KEY_B)) {
+      keys |= input_t::ZOOM_OUT;
+    }
+
+    if (KeyPressedFast(KEY_X)) {
+      ctrl_pressed = true;
+    } else if (keys == input_t::NONE) {
+      ctrl_pressed = false;
+    }
+
+    if (KeyPressedFast(KEY_Y)) {
       ResetToBootLoader();
     }
 
