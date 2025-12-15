@@ -8,6 +8,7 @@
 
 #include "fixbrot/common.hpp"
 #include "fixbrot/engine.hpp"
+#include "fixbrot/palette.hpp"
 
 namespace fixbrot {
 
@@ -18,16 +19,12 @@ result_t on_dispatch(const vec_t &req);
 bool on_collect(cell_t *resp);
 result_t on_send_line(pos_t x, pos_t y, pos_t width, const col_t *data);
 
-static inline uint16_t pack565(uint8_t r, uint8_t g, uint8_t b) {
-  return ((uint16_t)r << 11) | ((uint16_t)g << 5) | b;
-}
-
 template <uint16_t prm_WIDTH, uint16_t prm_HEIGHT>
 class App {
  public:
   static constexpr pos_t SCREEN_W = prm_WIDTH;
   static constexpr pos_t SCREEN_H = prm_HEIGHT;
-  static constexpr int16_t SCALING_ANIMATION_DURATION_MS = 300;
+  static constexpr int16_t ZOOM_ANIMATION_DURATION_MS = 300;
   col_t line_buff[SCREEN_W];
   iter_t work_buff[SCREEN_W * SCREEN_H];
 
@@ -41,10 +38,12 @@ class App {
   iter_t max_iter = 200;
   uint32_t iter_accum = 0;
 
-  int16_t scaling_animation_ms = 0;
+  int16_t zoom_animation_ms = 0;
   float scroll_accum_x = 0;
   float scroll_accum_y = 0;
-  palette_t palette = palette_t::HEAT_MAP;
+
+  Palette palette;
+  pos_t x_buff[SCREEN_W];
 
   input_t last_keys = input_t::NONE;
 
@@ -83,7 +82,7 @@ class App {
       } else if (!!(down_keys & input_t::ITER_DEC)) {
         FIXBROT_TRY(set_max_iter(max_iter - 100));
       } else if (!!(down_keys & input_t::PALETTE_CHANGE)) {
-        FIXBROT_TRY(change_palette());
+        FIXBROT_TRY(palette.next());
       }
     } else {
       FIXBROT_TRY(iterate());
@@ -91,61 +90,7 @@ class App {
 
     if (repaint_requested) {
       repaint_requested = false;
-
-      int16_t scaling = 256;
-      if (scaling_animation_ms > 0) {
-        scaling_animation_ms -= delta_us / 1000;
-        if (scaling_animation_ms < 0) {
-          scaling_animation_ms = 0;
-        }
-        scaling = 256 + (int32_t)scaling_animation_ms * 256 /
-                            SCALING_ANIMATION_DURATION_MS;
-        repaint_requested = true;
-      } else if (scaling_animation_ms < 0) {
-        scaling_animation_ms += delta_us / 1000;
-        if (scaling_animation_ms > 0) {
-          scaling_animation_ms = 0;
-        }
-        scaling = 256 + (int32_t)scaling_animation_ms * 128 /
-                            SCALING_ANIMATION_DURATION_MS;
-        repaint_requested = true;
-      }
-
-      for (pos_t y = 0; y < SCREEN_H; y++) {
-        pos_t sy = y;
-        if (scaling_animation_ms != 0) {
-          sy = (int32_t)(y - SCREEN_H / 2) * scaling / 256 + (SCREEN_H / 2);
-        }
-        if (scaling_animation_ms > 0) {
-          sy = (sy / 2) * 2;
-        }
-
-        for (pos_t x = 0; x < SCREEN_W; x++) {
-          pos_t sx = x;
-          if (scaling_animation_ms != 0) {
-            sx = (int32_t)(x - SCREEN_W / 2) * scaling / 256 + (SCREEN_W / 2);
-          }
-
-          if (sx < 0 || sx >= SCREEN_W || sy < 0 || sy >= SCREEN_H) {
-            line_buff[x] = 0x0000;
-            continue;
-          }
-
-          if (scaling_animation_ms > 0) {
-            sx = (sx / 2) * 2;
-          }
-
-          iter_t iter = work_buff[sy * SCREEN_W + sx];
-          if (iter == ITER_BLANK) {
-            line_buff[x] = 0x0000;
-          } else if (iter == ITER_QUEUED) {
-            line_buff[x] = 0xFFE0;
-          } else {
-            line_buff[x] = get_color(iter);
-          }
-        }
-        FIXBROT_TRY(on_send_line(0, y, SCREEN_W, line_buff));
-      }
+      repaint(delta_us);
     }
 
     last_keys = keys;
@@ -153,6 +98,69 @@ class App {
   }
 
  private:
+  result_t repaint(uint32_t delta_us) {
+    // zoom animation
+    int16_t scaling = 256;
+    if (zoom_animation_ms > 0) {
+      zoom_animation_ms -= delta_us / 1000;
+      if (zoom_animation_ms < 0) {
+        zoom_animation_ms = 0;
+      }
+      scaling =
+          256 + (int32_t)zoom_animation_ms * 256 / ZOOM_ANIMATION_DURATION_MS;
+      repaint_requested = true;
+    } else if (zoom_animation_ms < 0) {
+      zoom_animation_ms += delta_us / 1000;
+      if (zoom_animation_ms > 0) {
+        zoom_animation_ms = 0;
+      }
+      scaling =
+          256 + (int32_t)zoom_animation_ms * 128 / ZOOM_ANIMATION_DURATION_MS;
+      repaint_requested = true;
+    }
+
+    for (pos_t x = 0; x < SCREEN_W; x++) {
+      pos_t sx = x;
+      if (scaling != 256) {
+        sx = (int32_t)(x - SCREEN_W / 2) * scaling / 256 + (SCREEN_W / 2);
+        if (scaling > 256) {
+          sx = (sx / 2) * 2;
+        }
+      }
+      x_buff[x] = sx;
+    }
+
+    for (pos_t y = 0; y < SCREEN_H; y++) {
+      pos_t sy = y;
+      if (scaling != 256) {
+        sy = (int32_t)(y - SCREEN_H / 2) * scaling / 256 + (SCREEN_H / 2);
+        if (scaling > 256) {
+          sy = (sy / 2) * 2;
+        }
+      }
+
+      for (pos_t x = 0; x < SCREEN_W; x++) {
+        pos_t sx = x_buff[x];
+
+        if (sx < 0 || sx >= SCREEN_W || sy < 0 || sy >= SCREEN_H) {
+          line_buff[x] = 0x0000;
+          continue;
+        }
+
+        iter_t iter = work_buff[sy * SCREEN_W + sx];
+        if (iter == ITER_BLANK) {
+          line_buff[x] = 0x0000;
+        } else if (iter == ITER_QUEUED) {
+          line_buff[x] = 0xFFE0;
+        } else {
+          line_buff[x] = palette.get_color(iter);
+        }
+      }
+      FIXBROT_TRY(on_send_line(0, y, SCREEN_W, line_buff));
+    }
+    return result_t::SUCCESS;
+  }
+
   result_t scroll(uint32_t delta_us, input_t keys) {
     if (delta_us > 300 * 1000) {
       delta_us = 300 * 1000;
@@ -279,7 +287,7 @@ class App {
     }
     FIXBROT_TRY(start_render());
 
-    scaling_animation_ms = SCALING_ANIMATION_DURATION_MS;
+    zoom_animation_ms = ZOOM_ANIMATION_DURATION_MS;
     repaint_requested = true;
 
     return result_t::SUCCESS;
@@ -321,7 +329,7 @@ class App {
       FIXBROT_TRY(scan_hori(rect.x, rect.bottom() - 1, rect.bottom(), rect.w));
     }
 
-    scaling_animation_ms = -SCALING_ANIMATION_DURATION_MS;
+    zoom_animation_ms = -ZOOM_ANIMATION_DURATION_MS;
     repaint_requested = true;
 
     return result_t::SUCCESS;
@@ -471,7 +479,7 @@ class App {
       FIXBROT_TRY(compare(c, r, d, rd));
 
       uint32_t iter_thresh = SCREEN_W * SCREEN_H;
-      if (scaling_animation_ms != 0) {
+      if (zoom_animation_ms != 0) {
         iter_thresh /= 2;
       }
       if (pixel_step.is_fixed32()) {
@@ -566,74 +574,6 @@ class App {
       return true;
     } else {
       return false;
-    }
-  }
-
-  result_t change_palette() {
-    palette = static_cast<palette_t>((static_cast<uint8_t>(palette) + 1) %
-                                     static_cast<uint8_t>(palette_t::LAST));
-    repaint_requested = true;
-    return result_t::SUCCESS;
-  }
-
-  col_t get_color(iter_t iter) {
-    switch (palette) {
-      case palette_t::HEAT_MAP: {
-        if (iter < ITER_MAX) {
-          int i = iter % (32 * 6);
-          int coarse = i / 32;
-          int fine = i % 32;
-          switch (coarse) {
-            case 0: return pack565(0, fine / 2, fine);
-            case 1: return pack565(0, 16 + fine, 31);
-            case 2: return pack565(fine, 48 + fine / 2, 31);
-            case 3: return pack565(31, 63 - fine / 2, 31 - fine);
-            case 4: return pack565(31, 47 - fine, 0);
-            default: return pack565(31 - fine, 15 - fine / 2, 0);
-          }
-        } else {
-          return 0x0000;
-        }
-      } break;
-
-      case palette_t::RAINBOW: {
-        if (iter < ITER_MAX) {
-          int hue = iter % (64 * 6);
-          int coarse = hue / 64;
-          int fine = hue % 64;
-          uint8_t r = 0, g = 0, b = 0;
-          switch (coarse) {
-            case 0: return pack565(31, fine, 0);
-            case 1: return pack565(31 - (fine / 2), 63, 0);
-            case 2: return pack565(0, 63, fine / 2);
-            case 3: return pack565(0, 63 - fine, 31);
-            case 4: return pack565(fine / 2, 0, 31);
-            default: return pack565(31, 0, 31 - fine / 2);
-          }
-        } else {
-          return 0x0000;
-        }
-      } break;
-
-      case palette_t::GRAY: {
-        if (iter < ITER_MAX) {
-          uint16_t gray = iter % 64;
-          if (gray >= 32) {
-            gray = 63 - gray;
-          }
-          return (gray << 11) | (gray << 6) | gray;
-        } else {
-          return 0x0000;
-        }
-      } break;
-
-      default: {
-        if (iter < ITER_MAX) {
-          return (iter % 2 == 0) ? 0xFFFF : 0x0000;
-        } else {
-          return 0x0000;
-        }
-      } break;
     }
   }
 };

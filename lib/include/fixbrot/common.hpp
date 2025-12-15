@@ -134,9 +134,13 @@ enum class palette_t {
   HEAT_MAP,
   RAINBOW,
   GRAY,
-  BLACK_AND_WHITE,
+  BLACK_WHITE,
   LAST,
 };
+
+static inline uint16_t pack565(uint8_t r, uint8_t g, uint8_t b) {
+  return ((uint16_t)r << 11) | ((uint16_t)g << 5) | b;
+}
 
 } // namespace fixbrot
 
