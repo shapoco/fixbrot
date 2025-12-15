@@ -17,7 +17,6 @@ void on_render_finished(result_t res);
 result_t on_iterate();
 result_t on_dispatch(const vec_t &req);
 bool on_collect(cell_t *resp);
-result_t on_send_line(pos_t x, pos_t y, pos_t width, const col_t *data);
 
 template <uint16_t prm_WIDTH, uint16_t prm_HEIGHT>
 class App {
@@ -25,7 +24,8 @@ class App {
   static constexpr pos_t SCREEN_W = prm_WIDTH;
   static constexpr pos_t SCREEN_H = prm_HEIGHT;
   static constexpr int16_t ZOOM_DURATION_MS = 300;
-  col_t line_buff[SCREEN_W];
+
+ private:
   iter_t work_buff[SCREEN_W * SCREEN_H];
 
   uint16_t busy_items = 0;
@@ -44,12 +44,15 @@ class App {
   uint32_t delta_accum_us = 0;
 
   Palette palette;
+
   pos_t x_buff[SCREEN_W];
+  float scaling = 1.0f;
 
   input_t last_keys = input_t::NONE;
 
   bool repaint_requested = false;
 
+ public:
   App() {}
 
   result_t init() {
@@ -70,7 +73,11 @@ class App {
   }
 
   result_t service(uint32_t delta_us, input_t keys) {
+    if (keys != last_keys) {
+      delta_accum_us = 0;
+    }
     delta_accum_us += delta_us;
+
     if (is_busy()) {
       FIXBROT_TRY(iterate());
     } else {
@@ -85,28 +92,18 @@ class App {
         FIXBROT_TRY(set_max_iter(max_iter + 100));
       } else if (!!(down_keys & input_t::ITER_DEC)) {
         FIXBROT_TRY(set_max_iter(max_iter - 100));
-      } else if (!!(down_keys & input_t::PALETTE_CHANGE)) {
-        FIXBROT_TRY(palette.next());
+      } else if (!!(down_keys & input_t::CHANGE_PATTERN)) {
+        FIXBROT_TRY(palette.next_pattern());
+        repaint_requested = true;
+      } else if (!!(keys & input_t::CHANGE_SLOPE)) {
+        FIXBROT_TRY(palette.shift_forward());
         repaint_requested = true;
       }
       delta_accum_us = 0;
     }
 
-    if (repaint_requested) {
-      repaint_requested = false;
-      repaint(delta_us);
-    }
-
-    last_keys = keys;
-    return result_t::SUCCESS;
-  }
-
- private:
-  FIXBROT_INLINE bool is_busy() const { return busy_items > 0; }
-
-  result_t repaint(uint32_t delta_us) {
     // zoom animation
-    float scaling = 1.0f;
+    scaling = 1.0f;
     if (zoom_timer_ms > 0) {
       zoom_timer_ms -= delta_us / 1000;
       if (zoom_timer_ms < 0) {
@@ -123,6 +120,16 @@ class App {
       repaint_requested = true;
     }
 
+    last_keys = keys;
+    return result_t::SUCCESS;
+  }
+
+  FIXBROT_INLINE bool is_busy() const { return busy_items > 0; }
+
+  FIXBROT_INLINE bool is_repaint_requested() const { return repaint_requested; }
+
+  result_t paint_start() {
+    // cache x coordinates
     for (pos_t x = 0; x < SCREEN_W; x++) {
       pos_t sx = x;
       if (scaling != 1.0f) {
@@ -133,41 +140,47 @@ class App {
       }
       x_buff[x] = sx;
     }
+    return result_t::SUCCESS;
+  }
 
-    for (pos_t y = 0; y < SCREEN_H; y++) {
-      pos_t sy = y;
-      if (scaling != 1.0f) {
-        sy = (pos_t)((y - SCREEN_H / 2) * scaling + (SCREEN_H / 2));
-        if (scaling > 1.0f) {
-          sy = (sy / 2) * 2;
-        }
+  result_t paint_line(pos_t y, col_t *line_buff) {
+    pos_t sy = y;
+    if (scaling != 1.0f) {
+      sy = (pos_t)((y - SCREEN_H / 2) * scaling + (SCREEN_H / 2));
+      if (scaling > 1.0f) {
+        sy = (sy / 2) * 2;
+      }
+    }
+
+    for (pos_t x = 0; x < SCREEN_W; x++) {
+      pos_t sx = x_buff[x];
+
+      if (sx < 0 || sx >= SCREEN_W || sy < 0 || sy >= SCREEN_H) {
+        line_buff[x] = 0x0000;
+        continue;
       }
 
-      for (pos_t x = 0; x < SCREEN_W; x++) {
-        pos_t sx = x_buff[x];
-
-        if (sx < 0 || sx >= SCREEN_W || sy < 0 || sy >= SCREEN_H) {
-          line_buff[x] = 0x0000;
-          continue;
+      iter_t iter = work_buff[sy * SCREEN_W + sx];
+      if (iter == ITER_BLANK) {
+        line_buff[x] = 0x0000;
+      } else if (iter == ITER_QUEUED) {
+        line_buff[x] = 0xFFE0;
+      } else {
+        if (iter >= max_iter) {
+          iter = ITER_MAX;
         }
-
-        iter_t iter = work_buff[sy * SCREEN_W + sx];
-        if (iter == ITER_BLANK) {
-          line_buff[x] = 0x0000;
-        } else if (iter == ITER_QUEUED) {
-          line_buff[x] = 0xFFE0;
-        } else {
-          if (iter >= max_iter) {
-            iter = ITER_MAX;
-          }
-          line_buff[x] = palette.get_color(iter);
-        }
+        line_buff[x] = palette.get_color(iter);
       }
-      FIXBROT_TRY(on_send_line(0, y, SCREEN_W, line_buff));
     }
     return result_t::SUCCESS;
   }
 
+  result_t paint_finished() {
+    repaint_requested = false;
+    return result_t::SUCCESS;
+  }
+
+ private:
   result_t scroll(uint32_t delta_us, input_t keys) {
     if (delta_us > 500 * 1000) {
       delta_us = 500 * 1000;

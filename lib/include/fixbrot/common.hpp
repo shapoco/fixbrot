@@ -34,7 +34,8 @@ enum class input_t : uint16_t {
   ZOOM_OUT = (1 << 5),
   ITER_INC = (1 << 6),
   ITER_DEC = (1 << 7),
-  PALETTE_CHANGE = (1 << 8),
+  CHANGE_PATTERN = (1 << 8),
+  CHANGE_SLOPE = (1 << 9),
   SCROLL_MASK = SCROLL_UP | SCROLL_DOWN | SCROLL_LEFT | SCROLL_RIGHT,
 };
 
@@ -130,7 +131,7 @@ struct scene_t {
   iter_t max_iter;
 };
 
-enum class palette_t {
+enum class pattern_t {
   HEAT_MAP,
   RAINBOW,
   GRAY,

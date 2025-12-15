@@ -7,34 +7,38 @@ namespace fixbrot {
 
 class Palette {
  public:
-  static constexpr uint16_t MAX_PALETTE_SIZE = 512;
+  static constexpr uint16_t MAX_PALETTE_SIZE = 256;
 
  private:
-  palette_t name = palette_t::HEAT_MAP;
+  pattern_t pattern = pattern_t::HEAT_MAP;
+  uint16_t slope = 0;
+  uint16_t shift = 0;
   col_t array[MAX_PALETTE_SIZE] = {0};
+  uint16_t palette_size = MAX_PALETTE_SIZE;
   col_t deverged_color = 0x0000;
-  uint16_t size = 0;
 
  public:
   Palette() { init_heat_map(); }
 
-  result_t set_palette(palette_t pal) {
-    name = pal;
-    switch (pal) {
-      case palette_t::HEAT_MAP: init_heat_map(); break;
-      case palette_t::RAINBOW: init_rainbow(); break;
-      case palette_t::GRAY: init_gray(); break;
-      case palette_t::BLACK_WHITE: init_black_white(); break;
-      default: init_heat_map(); break;
-    }
+  result_t set_palette(pattern_t pal) {
+    pattern = pal;
+
     return result_t::SUCCESS;
   }
 
-  result_t next() {
-    palette_t next =
-        static_cast<palette_t>((static_cast<uint16_t>(name) + 1) %
-                               static_cast<uint16_t>(palette_t::LAST));
-    FIXBROT_TRY(set_palette(next));
+  result_t next_pattern() {
+    slope++;
+    if (slope >= 4) {
+      slope = 0;
+      pattern = static_cast<pattern_t>((static_cast<uint16_t>(pattern) + 1) %
+                                       static_cast<uint16_t>(pattern_t::LAST));
+    }
+    init_palette();
+    return result_t::SUCCESS;
+  }
+
+  result_t shift_forward() {
+    shift = (shift + MAX_PALETTE_SIZE - 1) % MAX_PALETTE_SIZE;
     return result_t::SUCCESS;
   }
 
@@ -42,16 +46,28 @@ class Palette {
     if (iter == ITER_MAX) {
       return deverged_color;
     } else {
-      return array[iter % size];
+      return array[(iter + shift) & (palette_size - 1)];
     }
   }
 
  private:
+  void init_palette() {
+    switch (pattern) {
+      case pattern_t::HEAT_MAP: init_heat_map(); break;
+      case pattern_t::RAINBOW: init_rainbow(); break;
+      case pattern_t::GRAY: init_gray(); break;
+      case pattern_t::BLACK_WHITE: init_black_white(); break;
+      default: init_heat_map(); break;
+    }
+  }
+
   void init_heat_map() {
-    size = 32 * 6;
-    for (uint16_t i = 0; i < size; i++) {
-      int c = i / 32;
-      int f = i % 32;
+    palette_size = MAX_PALETTE_SIZE >> slope;
+    deverged_color = 0x0000;
+    for (uint16_t i = 0; i < palette_size; i++) {
+      int p = i * (32 * 6) / palette_size;
+      int c = p / 32;
+      int f = p % 32;
       switch (c) {
         case 0: array[i] = pack565(0, f / 2, f); break;
         case 1: array[i] = pack565(0, 16 + f, 31); break;
@@ -61,14 +77,15 @@ class Palette {
         default: array[i] = pack565(31 - f, 15 - f / 2, 0); break;
       }
     }
-    deverged_color = 0x0000;
   }
 
   void init_rainbow() {
-    size = 64 * 6;
-    for (uint16_t i = 0; i < size; i++) {
-      int c = i / 64;
-      int f = i % 64;
+    palette_size = MAX_PALETTE_SIZE >> slope;
+    deverged_color = 0x0000;
+    for (uint16_t i = 0; i < palette_size; i++) {
+      int p = i * (64 * 6) / palette_size;
+      int c = p / 64;
+      int f = p % 64;
       switch (c) {
         case 0: array[i] = pack565(31, f, 0); break;
         case 1: array[i] = pack565(31 - (f / 2), 63, 0); break;
@@ -78,26 +95,27 @@ class Palette {
         default: array[i] = pack565(31, 0, 31 - f / 2); break;
       }
     }
-    deverged_color = 0x0000;
   }
 
   void init_gray() {
-    size = 64;
+    palette_size = MAX_PALETTE_SIZE >> slope;
     deverged_color = 0x0000;
-    for (uint16_t i = 0; i < size; i++) {
-      uint16_t gray = i % 64;
-      if (gray >= 32) {
-        gray = 63 - gray;
+    for (uint16_t i = 0; i < palette_size; i++) {
+      uint16_t gray = i * 128 / palette_size;
+      if (gray >= 64) {
+        gray = 127 - gray;
       }
-      array[i] = (gray << 11) | (gray << 6) | gray;
+      array[i] = pack565(gray >> 1, gray, gray >> 1);
     }
   }
 
   void init_black_white() {
-    size = 2;
-    array[0] = 0x0000;
-    array[1] = 0xFFFF;
+    palette_size = 16 >> slope;
     deverged_color = 0x0000;
+    for (uint16_t i = 0; i < palette_size; i++) {
+      array[i] =
+          (i < palette_size / 2) ? pack565(28, 56, 28) : pack565(4, 8, 4);
+    }
   }
 };
 

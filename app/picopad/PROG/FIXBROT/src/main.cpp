@@ -10,11 +10,13 @@ bool ctrl_pressed = false;
 App<WIDTH, HEIGHT> app;
 Engine<WIDTH * 8, WIDTH * 8> engine0;
 Engine<WIDTH * 8, WIDTH * 8> engine1;
+col_t line_buff[WIDTH];
 
 uint64_t t_start = 0;
 uint64_t t_elapsed = 0;
 
 void core1_main();
+void paint();
 
 int main() {
   app.init();
@@ -30,10 +32,10 @@ int main() {
     input_t keys = input_t::NONE;
     if (ctrl_pressed) {
       if (KeyPressedFast(KEY_LEFT)) {
-        // nothing
+        keys |= input_t::CHANGE_SLOPE;
       }
       if (KeyPressedFast(KEY_RIGHT)) {
-        keys |= input_t::PALETTE_CHANGE;
+        keys |= input_t::CHANGE_PATTERN;
       }
       if (KeyPressedFast(KEY_DOWN)) {
         keys |= input_t::ITER_DEC;
@@ -76,6 +78,7 @@ int main() {
     if (app.service(delta_us, keys) != result_t::SUCCESS) {
       LedFlip(LED1);
     }
+    paint();
 
     // char buf[64];
     // snprintf(buf, sizeof(buf), "Time: %llu us", t_elapsed);
@@ -89,14 +92,20 @@ void core1_main() {
   }
 }
 
-result_t fixbrot::on_send_line(pos_t x, pos_t y, pos_t width,
-                               const col_t *data) {
-  DispStartImg(x, x + width, y, y + 1);
-  for (pos_t i = 0; i < width; i++) {
-    DispSendImg2(data[i]);
+void paint() {
+  if (app.is_repaint_requested()) {
+    app.paint_start();
+    for (pos_t y = 0; y < HEIGHT; y++) {
+      app.paint_line(y, line_buff);
+      if (y > 0) DispStopImg();
+      DispStartImg(0, WIDTH, y, y + 1);
+      for (pos_t x = 0; x < WIDTH; x++) {
+        DispSendImg2(line_buff[x]);
+      }
+    }
+    DispStopImg();
+    app.paint_finished();
   }
-  DispStopImg();
-  return result_t::SUCCESS;
 }
 
 void fixbrot::on_render_start(scene_t &scene) {
