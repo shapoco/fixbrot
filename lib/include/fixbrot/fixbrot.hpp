@@ -24,7 +24,7 @@ class App {
  public:
   static constexpr pos_t SCREEN_W = prm_WIDTH;
   static constexpr pos_t SCREEN_H = prm_HEIGHT;
-  static constexpr int16_t ZOOM_ANIMATION_DURATION_MS = 300;
+  static constexpr int16_t ZOOM_DURATION_MS = 300;
   col_t line_buff[SCREEN_W];
   iter_t work_buff[SCREEN_W * SCREEN_H];
 
@@ -38,9 +38,10 @@ class App {
   iter_t max_iter = 200;
   uint32_t iter_accum = 0;
 
-  int16_t zoom_animation_ms = 0;
+  int16_t zoom_timer_ms = 0;
   float scroll_accum_x = 0;
   float scroll_accum_y = 0;
+  uint32_t delta_accum_us = 0;
 
   Palette palette;
   pos_t x_buff[SCREEN_W];
@@ -69,10 +70,13 @@ class App {
   }
 
   result_t service(uint32_t delta_us, input_t keys) {
-    input_t down_keys = keys & (~last_keys);
-    if (busy_items == 0) {
+    delta_accum_us += delta_us;
+    if (is_busy()) {
+      FIXBROT_TRY(iterate());
+    } else {
+      input_t down_keys = keys & (~last_keys);
       if (!!(keys & input_t::SCROLL_MASK)) {
-        FIXBROT_TRY(scroll(delta_us, keys));
+        FIXBROT_TRY(scroll(delta_accum_us, keys));
       } else if (!!(down_keys & input_t::ZOOM_IN)) {
         FIXBROT_TRY(zoom_in());
       } else if (!!(down_keys & input_t::ZOOM_OUT)) {
@@ -85,8 +89,7 @@ class App {
         FIXBROT_TRY(palette.next());
         repaint_requested = true;
       }
-    } else {
-      FIXBROT_TRY(iterate());
+      delta_accum_us = 0;
     }
 
     if (repaint_requested) {
@@ -99,32 +102,32 @@ class App {
   }
 
  private:
+  FIXBROT_INLINE bool is_busy() const { return busy_items > 0; }
+
   result_t repaint(uint32_t delta_us) {
     // zoom animation
-    int16_t scaling = 256;
-    if (zoom_animation_ms > 0) {
-      zoom_animation_ms -= delta_us / 1000;
-      if (zoom_animation_ms < 0) {
-        zoom_animation_ms = 0;
+    float scaling = 1.0f;
+    if (zoom_timer_ms > 0) {
+      zoom_timer_ms -= delta_us / 1000;
+      if (zoom_timer_ms < 0) {
+        zoom_timer_ms = 0;
       }
-      scaling =
-          256 + (int32_t)zoom_animation_ms * 256 / ZOOM_ANIMATION_DURATION_MS;
+      scaling = 1.0f + (float)zoom_timer_ms / ZOOM_DURATION_MS;
       repaint_requested = true;
-    } else if (zoom_animation_ms < 0) {
-      zoom_animation_ms += delta_us / 1000;
-      if (zoom_animation_ms > 0) {
-        zoom_animation_ms = 0;
+    } else if (zoom_timer_ms < 0) {
+      zoom_timer_ms += delta_us / 1000;
+      if (zoom_timer_ms > 0) {
+        zoom_timer_ms = 0;
       }
-      scaling =
-          256 + (int32_t)zoom_animation_ms * 128 / ZOOM_ANIMATION_DURATION_MS;
+      scaling = 1.0f + (float)zoom_timer_ms / 2 / ZOOM_DURATION_MS;
       repaint_requested = true;
     }
 
     for (pos_t x = 0; x < SCREEN_W; x++) {
       pos_t sx = x;
-      if (scaling != 256) {
-        sx = (int32_t)(x - SCREEN_W / 2) * scaling / 256 + (SCREEN_W / 2);
-        if (scaling > 256) {
+      if (scaling != 1.0f) {
+        sx = (pos_t)((x - SCREEN_W / 2) * scaling + (SCREEN_W / 2));
+        if (scaling > 1.0f) {
           sx = (sx / 2) * 2;
         }
       }
@@ -133,9 +136,9 @@ class App {
 
     for (pos_t y = 0; y < SCREEN_H; y++) {
       pos_t sy = y;
-      if (scaling != 256) {
-        sy = (int32_t)(y - SCREEN_H / 2) * scaling / 256 + (SCREEN_H / 2);
-        if (scaling > 256) {
+      if (scaling != 1.0f) {
+        sy = (pos_t)((y - SCREEN_H / 2) * scaling + (SCREEN_H / 2));
+        if (scaling > 1.0f) {
           sy = (sy / 2) * 2;
         }
       }
@@ -154,6 +157,9 @@ class App {
         } else if (iter == ITER_QUEUED) {
           line_buff[x] = 0xFFE0;
         } else {
+          if (iter >= max_iter) {
+            iter = ITER_MAX;
+          }
           line_buff[x] = palette.get_color(iter);
         }
       }
@@ -288,7 +294,7 @@ class App {
     }
     FIXBROT_TRY(start_render());
 
-    zoom_animation_ms = ZOOM_ANIMATION_DURATION_MS;
+    zoom_timer_ms = ZOOM_DURATION_MS;
     repaint_requested = true;
 
     return result_t::SUCCESS;
@@ -330,7 +336,7 @@ class App {
       FIXBROT_TRY(scan_hori(rect.x, rect.bottom() - 1, rect.bottom(), rect.w));
     }
 
-    zoom_animation_ms = -ZOOM_ANIMATION_DURATION_MS;
+    zoom_timer_ms = -ZOOM_DURATION_MS;
     repaint_requested = true;
 
     return result_t::SUCCESS;
@@ -480,7 +486,7 @@ class App {
       FIXBROT_TRY(compare(c, r, d, rd));
 
       uint32_t iter_thresh = SCREEN_W * SCREEN_H * 2;
-      if (zoom_animation_ms != 0) {
+      if (zoom_timer_ms != 0) {
         iter_thresh /= 4;
       }
       if (pixel_step.is_fixed32()) {
