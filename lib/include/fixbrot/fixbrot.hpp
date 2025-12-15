@@ -83,6 +83,7 @@ class App {
         FIXBROT_TRY(set_max_iter(max_iter - 100));
       } else if (!!(down_keys & input_t::PALETTE_CHANGE)) {
         FIXBROT_TRY(palette.next());
+        repaint_requested = true;
       }
     } else {
       FIXBROT_TRY(iterate());
@@ -162,8 +163,8 @@ class App {
   }
 
   result_t scroll(uint32_t delta_us, input_t keys) {
-    if (delta_us > 300 * 1000) {
-      delta_us = 300 * 1000;
+    if (delta_us > 500 * 1000) {
+      delta_us = 500 * 1000;
     }
 
     if (!!(keys & input_t::SCROLL_LEFT) && center_re > -2) {
@@ -478,9 +479,9 @@ class App {
       FIXBROT_TRY(compare(c, l, d, ld));
       FIXBROT_TRY(compare(c, r, d, rd));
 
-      uint32_t iter_thresh = SCREEN_W * SCREEN_H;
+      uint32_t iter_thresh = SCREEN_W * SCREEN_H * 2;
       if (zoom_animation_ms != 0) {
-        iter_thresh /= 2;
+        iter_thresh /= 4;
       }
       if (pixel_step.is_fixed32()) {
         iter_thresh *= 2;
