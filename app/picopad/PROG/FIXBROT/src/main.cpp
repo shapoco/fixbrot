@@ -131,12 +131,14 @@ static fb::result_t fetch() {
   bool stall;
   do {
     stall = true;
-    fb::Engine &e = engines[engine_index];
-    if (!e.full() && queue.dequeue(&loc)) {
-      FIXBROT_TRY(e.dispatch(loc));
-      stall = false;
+    for (int i = 0; i < NUM_ENGINES; i++) {
+      fb::Engine &e = engines[engine_index];
+      if (!e.full() && queue.dequeue(&loc)) {
+        FIXBROT_TRY(e.dispatch(loc));
+        stall = false;
+      }
+      engine_index = (engine_index + 1) % NUM_ENGINES;
     }
-    engine_index = (engine_index + 1) % NUM_ENGINES;
   } while (!stall);
   return fb::result_t::SUCCESS;
 }
