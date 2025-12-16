@@ -498,9 +498,9 @@ class App {
       FIXBROT_TRY(compare(c, l, d, ld));
       FIXBROT_TRY(compare(c, r, d, rd));
 
-      uint32_t iter_thresh = SCREEN_W * SCREEN_H * 2;
+      uint32_t iter_thresh = SCREEN_W * SCREEN_H * 4;
       if (zoom_timer_ms != 0) {
-        iter_thresh /= 4;
+        iter_thresh /= 8;
       }
       if (pixel_step.is_fixed32()) {
         iter_thresh *= 2;

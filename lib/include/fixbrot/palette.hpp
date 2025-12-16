@@ -110,7 +110,7 @@ class Palette {
   }
 
   void init_black_white() {
-    palette_size = 16 >> slope;
+    palette_size = 64 >> slope;
     deverged_color = 0x0000;
     for (uint16_t i = 0; i < palette_size; i++) {
       array[i] =

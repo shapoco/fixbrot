@@ -2,15 +2,17 @@
 
 #include "fixbrot/fixbrot.hpp"
 
-using namespace fixbrot;
+namespace fb = fixbrot;
+
+static constexpr uint16_t NUM_ENGINES = 2;
 
 uint64_t now_us = 0;
 bool ctrl_pressed = false;
 
-App<WIDTH, HEIGHT> app;
-Engine<WIDTH * 8, WIDTH * 8> engine0;
-Engine<WIDTH * 8, WIDTH * 8> engine1;
-col_t line_buff[WIDTH];
+fb::App<WIDTH, HEIGHT> app;
+fb::ArrayQueue<fb::vec_t, WIDTH * 32> queue;
+fb::Engine engines[NUM_ENGINES];
+uint16_t line_buff[WIDTH];
 
 uint64_t t_start = 0;
 uint64_t t_elapsed = 0;
@@ -29,45 +31,45 @@ int main() {
     now_us = Time64();
     uint32_t delta_us = (uint32_t)(now_us - last_us);
 
-    input_t keys = input_t::NONE;
+    fb::input_t keys = fb::input_t::NONE;
     if (ctrl_pressed) {
       if (KeyPressedFast(KEY_LEFT)) {
-        keys |= input_t::CHANGE_SLOPE;
+        keys |= fb::input_t::CHANGE_SLOPE;
       }
       if (KeyPressedFast(KEY_RIGHT)) {
-        keys |= input_t::CHANGE_PATTERN;
+        keys |= fb::input_t::CHANGE_PATTERN;
       }
       if (KeyPressedFast(KEY_DOWN)) {
-        keys |= input_t::ITER_DEC;
+        keys |= fb::input_t::ITER_DEC;
       }
       if (KeyPressedFast(KEY_UP)) {
-        keys |= input_t::ITER_INC;
+        keys |= fb::input_t::ITER_INC;
       }
     } else {
       if (KeyPressedFast(KEY_LEFT)) {
-        keys |= input_t::SCROLL_LEFT;
+        keys |= fb::input_t::SCROLL_LEFT;
       }
       if (KeyPressedFast(KEY_RIGHT)) {
-        keys |= input_t::SCROLL_RIGHT;
+        keys |= fb::input_t::SCROLL_RIGHT;
       }
       if (KeyPressedFast(KEY_DOWN)) {
-        keys |= input_t::SCROLL_DOWN;
+        keys |= fb::input_t::SCROLL_DOWN;
       }
       if (KeyPressedFast(KEY_UP)) {
-        keys |= input_t::SCROLL_UP;
+        keys |= fb::input_t::SCROLL_UP;
       }
     }
 
     if (KeyPressedFast(KEY_A)) {
-      keys |= input_t::ZOOM_IN;
+      keys |= fb::input_t::ZOOM_IN;
     }
     if (KeyPressedFast(KEY_B)) {
-      keys |= input_t::ZOOM_OUT;
+      keys |= fb::input_t::ZOOM_OUT;
     }
 
     if (KeyPressedFast(KEY_X)) {
       ctrl_pressed = true;
-    } else if (keys == input_t::NONE) {
+    } else if (keys == fb::input_t::NONE) {
       ctrl_pressed = false;
     }
 
@@ -75,7 +77,7 @@ int main() {
       ResetToBootLoader();
     }
 
-    if (app.service(delta_us, keys) != result_t::SUCCESS) {
+    if (app.service(delta_us, keys) != fb::result_t::SUCCESS) {
       LedFlip(LED1);
     }
     paint();
@@ -88,63 +90,79 @@ int main() {
 
 void core1_main() {
   while (true) {
-    engine1.service();
+    engines[1].service();
   }
 }
 
 void paint() {
-  if (app.is_repaint_requested()) {
-    app.paint_start();
-    for (pos_t y = 0; y < HEIGHT; y++) {
-      app.paint_line(y, line_buff);
-      if (y > 0) DispStopImg();
-      DispStartImg(0, WIDTH, y, y + 1);
-      for (pos_t x = 0; x < WIDTH; x++) {
-        DispSendImg2(line_buff[x]);
-      }
+  if (!app.is_repaint_requested()) {
+    return;
+  }
+  app.paint_start();
+  for (fb::pos_t y = 0; y < HEIGHT; y++) {
+    app.paint_line(y, line_buff);
+    if (y > 0) DispStopImg();
+    DispStartImg(0, WIDTH, y, y + 1);
+    for (fb::pos_t x = 0; x < WIDTH; x++) {
+      DispSendImg2(line_buff[x]);
     }
-    DispStopImg();
-    app.paint_finished();
+  }
+  DispStopImg();
+  app.paint_finished();
+}
+
+void fixbrot::on_render_start(fb::scene_t &scene) {
+  t_start = Time64();
+  LedOn(LED1);
+  queue.clear();
+  for (int i = 0; i < NUM_ENGINES; i++) {
+    engines[i].init(scene);
   }
 }
 
-void fixbrot::on_render_start(scene_t &scene) {
-  t_start = Time64();
-  LedOn(LED1);
-  engine0.init(scene);
-  engine1.init(scene);
-}
-
-void fixbrot::on_render_finished(result_t res) {
+void fixbrot::on_render_finished(fb::result_t res) {
   LedOff(LED1);
   t_elapsed = Time64() - t_start;
 }
 
-result_t fixbrot::on_iterate() { return engine0.service(); }
-
-static bool use_engine0 = true;
-result_t fixbrot::on_dispatch(const vec_t &loc) {
-  if (use_engine0) {
-    return engine0.dispatch(loc);
-  } else {
-    return engine1.dispatch(loc);
-  }
-  use_engine0 = !use_engine0;
+static int engine_index = 0;
+static fb::result_t fetch() {
+  fb::vec_t loc;
+  bool stall;
+  do {
+    stall = true;
+    fb::Engine &e = engines[engine_index];
+    if (!e.full() && queue.dequeue(&loc)) {
+      FIXBROT_TRY(e.dispatch(loc));
+      stall = false;
+    }
+    engine_index = (engine_index + 1) % NUM_ENGINES;
+  } while (!stall);
+  return fb::result_t::SUCCESS;
 }
 
-bool fixbrot::on_collect(cell_t *resp) {
-  if (engine0.load() >= engine1.load()) {
-    if (engine0.collect(resp)) {
+fb::result_t fixbrot::on_iterate() {
+  FIXBROT_TRY(fetch());
+  return engines[0].service();
+}
+
+fb::result_t fixbrot::on_dispatch(const fb::vec_t &loc) {
+  FIXBROT_TRY(queue.enqueue(loc));
+  return fetch();
+}
+
+bool fixbrot::on_collect(fb::cell_t *resp) {
+  if (engines[0].load() > engines[1].load()) {
+    if (engines[0].collect(resp)) {
       return true;
     } else {
-      return engine1.collect(resp);
+      return engines[1].collect(resp);
     }
   } else {
-    if (engine1.collect(resp)) {
+    if (engines[1].collect(resp)) {
       return true;
     } else {
-      return engine0.collect(resp);
+      return engines[0].collect(resp);
     }
   }
-  return false;
 }

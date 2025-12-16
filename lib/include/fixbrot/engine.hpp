@@ -11,32 +11,63 @@
 
 namespace fixbrot {
 
-template <uint16_t prm_REQ_QUEUE_DEPTH, uint16_t prm_RESP_QUEUE_DEPTH>
 class Engine {
-private:
-  ArrayQueue<vec_t, prm_REQ_QUEUE_DEPTH> req_queue;
-  ArrayQueue<cell_t, prm_RESP_QUEUE_DEPTH> resp_queue;
+ public:
+  const uint16_t depth;
+
+ private:
+  cell_t *queue;
+  volatile uint16_t wr_ptr = 0;
+  volatile uint16_t proc_ptr = 0;
+  volatile uint16_t rd_ptr = 0;
   scene_t scene;
 
-public:
+ public:
+  Engine(uint16_t depth_bits = 8)
+      : depth(1 << depth_bits), queue(new cell_t[depth]) {}
+
+  ~Engine() { delete[] queue; }
+
   result_t init(scene_t &scene) {
     this->scene = scene;
-    req_queue.clear();
-    resp_queue.clear();
+    wr_ptr = 0;
+    proc_ptr = 0;
+    rd_ptr = 0;
     return result_t::SUCCESS;
   }
 
-  inline uint16_t load() const { return req_queue.size(); }
-  inline result_t dispatch(vec_t loc) { return req_queue.enqueue(loc); }
-  inline bool collect(cell_t *resp) { return resp_queue.dequeue(resp); }
+  FIXBROT_INLINE bool full() const {
+    return ((wr_ptr + 1) & (depth - 1)) == rd_ptr;
+  }
+
+  FIXBROT_INLINE bool empty() const { return rd_ptr == wr_ptr; }
+
+  FIXBROT_INLINE uint16_t load() const {
+    return (wr_ptr - proc_ptr) & (depth - 1);
+  }
+
+  FIXBROT_INLINE result_t dispatch(vec_t loc) {
+    uint16_t wp = wr_ptr;
+    uint16_t next_wp = (wp + 1) & (depth - 1);
+    if (next_wp == rd_ptr) {
+      return result_t::ERROR_QUEUE_OVERFLOW;
+    }
+    queue[wp].loc = loc;
+    wr_ptr = next_wp;
+    return result_t::SUCCESS;
+  }
+
+  FIXBROT_INLINE bool collect(cell_t *resp) {
+    uint16_t rp = rd_ptr;
+    if (rp == proc_ptr) return false;
+    *resp = queue[rp];
+    rd_ptr = (rp + 1) & (depth - 1);
+    return true;
+  }
 
   result_t service() {
-    int n = req_queue.size();
     vec_t loc;
-    for (int i = 0; i < n; i++) {
-      if (!req_queue.dequeue(&loc)) {
-        break;
-      }
+    while (fetch(&loc)) {
       real_t re = scene.real + scene.step * loc.x;
       real_t im = scene.imag + scene.step * loc.y;
 
@@ -54,12 +85,25 @@ public:
       if (resp.iter == scene.max_iter) {
         resp.iter = ITER_MAX;
       }
-      FIXBROT_TRY(resp_queue.enqueue(resp));
+      advance(resp.iter);
     }
     return result_t::SUCCESS;
   }
 
-private:
+ private:
+  FIXBROT_INLINE bool fetch(vec_t *loc) {
+    uint16_t pp = proc_ptr;
+    if (pp == wr_ptr) return false;
+    *loc = queue[pp].loc;
+    return true;
+  }
+
+  FIXBROT_INLINE void advance(iter_t iter) {
+    uint16_t pp = proc_ptr;
+    queue[pp].iter = iter;
+    proc_ptr = (pp + 1) & (depth - 1);
+  }
+
   iter_t mandelbrot64(fixed64_t a, fixed64_t b) {
     fixed64_t x = 0;
     fixed64_t y = 0;
@@ -91,5 +135,5 @@ private:
   }
 };
 
-} // namespace fixbrot
+}  // namespace fixbrot
 #endif

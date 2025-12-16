@@ -16,12 +16,12 @@ enum class result_t : uint16_t {
   ERROR_BUSY,
 };
 
-#define FIXBROT_TRY(expr)                                                      \
-  do {                                                                         \
-    result_t res = (expr);                                                     \
-    if (res != result_t::SUCCESS) {                                            \
-      return res;                                                              \
-    }                                                                          \
+#define FIXBROT_TRY(expr)                    \
+  do {                                       \
+    fixbrot::result_t res = (expr);          \
+    if (res != fixbrot::result_t::SUCCESS) { \
+      return res;                            \
+    }                                        \
   } while (0)
 
 enum class input_t : uint16_t {
@@ -143,6 +143,6 @@ static inline uint16_t pack565(uint8_t r, uint8_t g, uint8_t b) {
   return ((uint16_t)r << 11) | ((uint16_t)g << 5) | b;
 }
 
-} // namespace fixbrot
+}  // namespace fixbrot
 
 #endif

@@ -39,6 +39,10 @@ struct fixed64_t {
     return fixed64_t::from_raw((int64_t)result);
   }
 
+  FIXBROT_INLINE fixed64_t operator-() const {
+    return fixed64_t::from_raw(-raw);
+  }
+
   FIXBROT_INLINE fixed64_t operator+(const fixed64_t &other) const {
     return fixed64_t::from_raw(raw + other.raw);
   }

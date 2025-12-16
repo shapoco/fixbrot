@@ -34,6 +34,10 @@ struct fixed32_t {
     return fixed32_t::from_raw((int32_t)(result >> 32));
   }
 
+  FIXBROT_INLINE fixed32_t operator-() const {
+    return fixed32_t::from_raw(-raw);
+  }
+
   FIXBROT_INLINE fixed32_t operator+(const fixed32_t &other) const {
     return fixed32_t::from_raw(raw + other.raw);
   }
