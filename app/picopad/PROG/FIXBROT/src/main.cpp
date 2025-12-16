@@ -128,8 +128,9 @@ void fixbrot::on_render_finished(fb::result_t res) {
 static int engine_index = 0;
 static fb::result_t fetch() {
   fb::vec_t loc;
-  bool stall;
-  do {
+  bool stall = false;
+  int n = queue.size();
+  while (n-- > 0 && !stall) {
     stall = true;
     for (int i = 0; i < NUM_ENGINES; i++) {
       fb::Engine &e = engines[engine_index];
@@ -139,7 +140,7 @@ static fb::result_t fetch() {
       }
       engine_index = (engine_index + 1) % NUM_ENGINES;
     }
-  } while (!stall);
+  }
   return fb::result_t::SUCCESS;
 }
 
