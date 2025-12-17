@@ -6,80 +6,124 @@ namespace fb = fixbrot;
 
 static constexpr uint16_t NUM_ENGINES = 2;
 
-uint64_t now_us = 0;
-bool ctrl_pressed = false;
+static fb::App<WIDTH, HEIGHT> app;
+static fb::Engine engines[NUM_ENGINES];
 
-fb::App<WIDTH, HEIGHT> app;
-fb::ArrayQueue<fb::vec_t, WIDTH * 32> queue;
-fb::Engine engines[NUM_ENGINES];
-uint16_t line_buff[WIDTH];
+static fb::builtin_palette_t palette = fb::builtin_palette_t::HEATMAP;
+static int palette_slope = 0;
+static bool palette_phase_shift_forward = true;
 
-uint64_t t_start = 0;
-uint64_t t_elapsed = 0;
+static int feed_index = 0;
+static uint16_t line_buff[WIDTH];
 
-void core1_main();
-void paint();
+static uint16_t last_pressed = 0;
+static bool ctrl_pressed = false;
+
+static uint64_t t_start = 0;
+static uint64_t t_elapsed = 0;
+
+static void core1_main();
+static void paint();
+static fb::result_t feed();
 
 int main() {
-  app.init();
-  now_us = Time64();
+  app.init(Time64() / 1000);
 
   Core1Exec(core1_main);
 
+  fb::vec_t scroll_delta = {0, 0};
+
   while (True) {
-    uint64_t last_us = now_us;
-    now_us = Time64();
-    uint32_t delta_us = (uint32_t)(now_us - last_us);
+    uint64_t now_ms = Time64() / 1000;
 
-    fb::input_t keys = fb::input_t::NONE;
-    if (ctrl_pressed) {
-      if (KeyPressedFast(KEY_LEFT)) {
-        keys |= fb::input_t::CHANGE_SLOPE;
-      }
-      if (KeyPressedFast(KEY_RIGHT)) {
-        keys |= fb::input_t::CHANGE_PATTERN;
-      }
-      if (KeyPressedFast(KEY_DOWN)) {
-        keys |= fb::input_t::ITER_DEC;
-      }
-      if (KeyPressedFast(KEY_UP)) {
-        keys |= fb::input_t::ITER_INC;
-      }
-    } else {
-      if (KeyPressedFast(KEY_LEFT)) {
-        keys |= fb::input_t::SCROLL_LEFT;
-      }
-      if (KeyPressedFast(KEY_RIGHT)) {
-        keys |= fb::input_t::SCROLL_RIGHT;
-      }
-      if (KeyPressedFast(KEY_DOWN)) {
-        keys |= fb::input_t::SCROLL_DOWN;
-      }
-      if (KeyPressedFast(KEY_UP)) {
-        keys |= fb::input_t::SCROLL_UP;
-      }
-    }
+    uint16_t key_pressed = 0;
+    if (KeyPressedFast(KEY_RIGHT)) key_pressed |= (1 << KEY_RIGHT);
+    if (KeyPressedFast(KEY_LEFT)) key_pressed |= (1 << KEY_LEFT);
+    if (KeyPressedFast(KEY_UP)) key_pressed |= (1 << KEY_UP);
+    if (KeyPressedFast(KEY_DOWN)) key_pressed |= (1 << KEY_DOWN);
+    if (KeyPressedFast(KEY_A)) key_pressed |= (1 << KEY_A);
+    if (KeyPressedFast(KEY_B)) key_pressed |= (1 << KEY_B);
+    if (KeyPressedFast(KEY_X)) key_pressed |= (1 << KEY_X);
+    if (KeyPressedFast(KEY_Y)) key_pressed |= (1 << KEY_Y);
+    uint16_t key_down = key_pressed & (~last_pressed);
+    uint16_t key_up = (~key_pressed) & last_pressed;
+    last_pressed = key_pressed;
 
-    if (KeyPressedFast(KEY_A)) {
-      keys |= fb::input_t::ZOOM_IN;
-    }
-    if (KeyPressedFast(KEY_B)) {
-      keys |= fb::input_t::ZOOM_OUT;
-    }
-
-    if (KeyPressedFast(KEY_X)) {
+    constexpr uint16_t EXCEPT_X = (1 << KEY_LEFT) | (1 << KEY_RIGHT) |
+                                  (1 << KEY_UP) | (1 << KEY_DOWN) |
+                                  (1 << KEY_A) | (1 << KEY_B) | (1 << KEY_Y);
+    if (key_pressed & (1 << KEY_X)) {
       ctrl_pressed = true;
-    } else if (keys == fb::input_t::NONE) {
+    } else if ((key_pressed & EXCEPT_X) == 0) {
       ctrl_pressed = false;
     }
 
-    if (KeyPressedFast(KEY_Y)) {
+    if (ctrl_pressed) {
+      if (key_down & (1 << KEY_LEFT)) {
+        if (palette_slope < fb::MAX_PALETTE_SLOPE) {
+          palette_slope++;
+        } else {
+          palette_slope = 0;
+          palette = fb::next_palette_of(palette);
+        }
+        app.load_builtin_palette(palette, palette_slope);
+      } else if (key_pressed & (1 << KEY_RIGHT)) {
+        if (key_down & (1 << KEY_RIGHT)) {
+          palette_phase_shift_forward = !palette_phase_shift_forward;
+        }
+        if (palette_phase_shift_forward) {
+          app.set_palette_phase(app.get_palette_phase() + 1);
+        } else {
+          app.set_palette_phase(app.get_palette_phase() - 1);
+        }
+      }
+    }
+
+    if (!app.is_busy()) {
+      if (ctrl_pressed) {
+        // change iteration count
+        if (key_down & (1 << KEY_DOWN)) {
+          app.set_max_iter(app.get_max_iter() - 100);
+        } else if (key_down & (1 << KEY_UP)) {
+          app.set_max_iter(app.get_max_iter() + 100);
+        }
+      } else {
+        // scroll
+        if (key_pressed & (1 << KEY_LEFT)) {
+          scroll_delta.x = fb::clamp(-32, -1, scroll_delta.x - 1);
+        } else if (key_pressed & (1 << KEY_RIGHT)) {
+          scroll_delta.x = fb::clamp(1, 32, scroll_delta.x + 1);
+        } else {
+          scroll_delta.x = 0;
+        }
+        if (key_pressed & (1 << KEY_UP)) {
+          scroll_delta.y = fb::clamp(-32, -1, scroll_delta.y - 1);
+        } else if (key_pressed & (1 << KEY_DOWN)) {
+          scroll_delta.y = fb::clamp(1, 32, scroll_delta.y + 1);
+        } else {
+          scroll_delta.y = 0;
+        }
+        if (scroll_delta.x != 0 || scroll_delta.y != 0) {
+          app.scroll(scroll_delta.x, scroll_delta.y);
+        }
+      }
+
+      // zoom
+      if (key_down & (1 << KEY_A)) {
+        app.zoom_in(now_ms);
+      } else if (key_down & (1 << KEY_B)) {
+        app.zoom_out(now_ms);
+      }
+    }
+
+    if (key_up & (1 << KEY_Y)) {
       ResetToBootLoader();
     }
 
-    if (app.service(delta_us, keys) != fb::result_t::SUCCESS) {
-      LedFlip(LED1);
-    }
+    feed();
+    engines[0].service();
+    app.service(now_ms);
+
     paint();
 
     // char buf[64];
@@ -88,13 +132,13 @@ int main() {
   }
 }
 
-void core1_main() {
+static void core1_main() {
   while (true) {
     engines[1].service();
   }
 }
 
-void paint() {
+static void paint() {
   if (!app.is_repaint_requested()) {
     return;
   }
@@ -111,10 +155,28 @@ void paint() {
   app.paint_finished();
 }
 
+static fb::result_t feed() {
+  bool stall = false;
+  int n = app.num_queued();
+  while (n-- > 0 && !stall) {
+    stall = true;
+    for (int i = 0; i < NUM_ENGINES; i++) {
+      fb::Engine &e = engines[feed_index];
+      feed_index = (feed_index + 1) % NUM_ENGINES;
+      fb::vec_t loc;
+      if (!e.full() && app.dequeue(&loc)) {
+        FIXBROT_TRY(e.dispatch(loc));
+        stall = false;
+        break;
+      }
+    }
+  }
+  return fb::result_t::SUCCESS;
+}
+
 void fixbrot::on_render_start(fb::scene_t &scene) {
   t_start = Time64();
   LedOn(LED1);
-  queue.clear();
   for (int i = 0; i < NUM_ENGINES; i++) {
     engines[i].init(scene);
   }
@@ -125,47 +187,10 @@ void fixbrot::on_render_finished(fb::result_t res) {
   t_elapsed = Time64() - t_start;
 }
 
-static int engine_index = 0;
-static fb::result_t fetch() {
-  fb::vec_t loc;
-  bool stall = false;
-  int n = queue.size();
-  while (n-- > 0 && !stall) {
-    stall = true;
-    for (int i = 0; i < NUM_ENGINES; i++) {
-      fb::Engine &e = engines[engine_index];
-      if (!e.full() && queue.dequeue(&loc)) {
-        FIXBROT_TRY(e.dispatch(loc));
-        stall = false;
-      }
-      engine_index = (engine_index + 1) % NUM_ENGINES;
-    }
-  }
-  return fb::result_t::SUCCESS;
-}
-
-fb::result_t fixbrot::on_iterate() {
-  FIXBROT_TRY(fetch());
-  return engines[0].service();
-}
-
-fb::result_t fixbrot::on_dispatch(const fb::vec_t &loc) {
-  FIXBROT_TRY(queue.enqueue(loc));
-  return fetch();
-}
-
 bool fixbrot::on_collect(fb::cell_t *resp) {
-  if (engines[0].load() > engines[1].load()) {
-    if (engines[0].collect(resp)) {
-      return true;
-    } else {
-      return engines[1].collect(resp);
-    }
+  if (engines[0].num_processed() > engines[1].num_processed()) {
+    return engines[0].collect(resp);
   } else {
-    if (engines[1].collect(resp)) {
-      return true;
-    } else {
-      return engines[0].collect(resp);
-    }
+    return engines[1].collect(resp);
   }
 }

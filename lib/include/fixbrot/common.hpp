@@ -24,70 +24,15 @@ enum class result_t : uint16_t {
     }                                        \
   } while (0)
 
-enum class input_t : uint16_t {
-  NONE = 0,
-  SCROLL_LEFT = (1 << 0),
-  SCROLL_RIGHT = (1 << 1),
-  SCROLL_UP = (1 << 2),
-  SCROLL_DOWN = (1 << 3),
-  ZOOM_IN = (1 << 4),
-  ZOOM_OUT = (1 << 5),
-  ITER_INC = (1 << 6),
-  ITER_DEC = (1 << 7),
-  CHANGE_PATTERN = (1 << 8),
-  CHANGE_SLOPE = (1 << 9),
-  SCROLL_MASK = SCROLL_UP | SCROLL_DOWN | SCROLL_LEFT | SCROLL_RIGHT,
-};
-
-static inline input_t operator&(input_t a, input_t b) {
-  return static_cast<input_t>(static_cast<uint16_t>(a) &
-                              static_cast<uint16_t>(b));
-}
-static inline input_t operator|(input_t a, input_t b) {
-  return static_cast<input_t>(static_cast<uint16_t>(a) |
-                              static_cast<uint16_t>(b));
-}
-static inline input_t operator~(input_t a) {
-  return static_cast<input_t>(~static_cast<uint16_t>(a));
-}
-static inline input_t &operator|=(input_t &a, input_t b) { return (a = a | b); }
-static inline bool operator!(input_t a) {
-  return static_cast<uint16_t>(a) == 0;
-}
-
-enum class precision_t : uint8_t {
-  FIXED32,
-  FIXED64,
-};
-
 using iter_t = uint16_t;
 using pos_t = int16_t;
 using col_t = uint16_t;
 
-#ifdef FIXBROT_USE_FLOAT
-
-using real_t = float;
-static inline real_t real_exp2(int exp) {
-  real_t result = 1.0f;
-  bool neg = (exp < 0);
-  if (neg) {
-    exp = -exp;
-  }
-  for (int i = 0; i < exp; i++) {
-    result *= 2;
-  }
-  return neg ? (1.0f / result) : result;
-}
-
-#else
-
 using real_t = fixed64_t;
 
-static inline real_t real_exp2(int exp) {
+static FIXBROT_INLINE real_t real_exp2(int exp) {
   return fixed64_t::from_raw((int64_t)1 << (fixed64_t::FRAC_BITS + exp));
 }
-
-#endif
 
 struct vec_t {
   pos_t x;
@@ -100,12 +45,12 @@ struct rect_t {
   pos_t w;
   pos_t h;
 
-  inline bool contains(vec_t loc) const {
+  FIXBROT_INLINE bool contains(vec_t loc) const {
     return (x <= loc.x) && (loc.x < x + w) && (y <= loc.y) && (loc.y < y + h);
   }
 
-  inline pos_t right() const { return x + w; }
-  inline pos_t bottom() const { return y + h; }
+  FIXBROT_INLINE pos_t right() const { return x + w; }
+  FIXBROT_INLINE pos_t bottom() const { return y + h; }
 };
 
 static constexpr iter_t ITER_BLANK = 0;
@@ -131,17 +76,40 @@ struct scene_t {
   iter_t max_iter;
 };
 
-enum class pattern_t {
-  HEAT_MAP,
+enum class builtin_palette_t {
+  HEATMAP,
   RAINBOW,
   GRAY,
-  BLACK_WHITE,
+  STRIPE,
   LAST,
 };
 
-static inline uint16_t pack565(uint8_t r, uint8_t g, uint8_t b) {
+static FIXBROT_INLINE builtin_palette_t
+next_palette_of(builtin_palette_t palette) {
+  return (builtin_palette_t)(((int)palette + 1) % (int)builtin_palette_t::LAST);
+}
+static FIXBROT_INLINE builtin_palette_t
+prev_palette_of(builtin_palette_t palette) {
+  return (builtin_palette_t)(((int)palette + (int)builtin_palette_t::LAST - 1) %
+                             (int)builtin_palette_t::LAST);
+}
+
+static FIXBROT_INLINE col_t pack565(uint8_t r, uint8_t g, uint8_t b) {
   return ((uint16_t)r << 11) | ((uint16_t)g << 5) | b;
 }
+
+template <typename T>
+static FIXBROT_INLINE T clamp(T min, T max, T val) {
+  if (val < min) return min;
+  if (val > max) return max;
+  return val;
+}
+
+static constexpr int BATCH_SIZE_CLOG2 = 8;
+static constexpr int BATCH_SIZE = 1 << BATCH_SIZE_CLOG2;
+
+static constexpr int MAX_PALETTE_SIZE = 256;
+static constexpr int MAX_PALETTE_SLOPE = 3;
 
 }  // namespace fixbrot
 
