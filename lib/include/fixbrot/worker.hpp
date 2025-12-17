@@ -1,5 +1,5 @@
-#ifndef FIXBROT_ENGINE_HPP
-#define FIXBROT_ENGINE_HPP
+#ifndef FIXBROT_WORKER_HPP
+#define FIXBROT_WORKER_HPP
 
 #ifndef FIXBROT_NO_STDLIB
 #include <stdint.h>
@@ -10,7 +10,7 @@
 
 namespace fixbrot {
 
-class Engine {
+class Worker {
  public:
   using index_t = uint32_t;
   static constexpr index_t DEPTH = BATCH_SIZE;

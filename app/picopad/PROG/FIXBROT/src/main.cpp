@@ -4,10 +4,10 @@
 
 namespace fb = fixbrot;
 
-static constexpr uint16_t NUM_ENGINES = 2;
+static constexpr uint16_t NUM_WORKERS = 2;
 
-static fb::App<WIDTH, HEIGHT> app;
-static fb::Engine engines[NUM_ENGINES];
+static fb::Renderer<WIDTH, HEIGHT> renderer;
+static fb::Worker workers[NUM_WORKERS];
 
 static fb::builtin_palette_t palette = fb::builtin_palette_t::HEATMAP;
 static int palette_slope = 0;
@@ -27,7 +27,7 @@ static void paint();
 static fb::result_t feed();
 
 int main() {
-  app.init(Time64() / 1000);
+  renderer.init(Time64() / 1000);
 
   Core1Exec(core1_main);
 
@@ -66,26 +66,26 @@ int main() {
           palette_slope = 0;
           palette = fb::next_palette_of(palette);
         }
-        app.load_builtin_palette(palette, palette_slope);
+        renderer.load_builtin_palette(palette, palette_slope);
       } else if (key_pressed & (1 << KEY_RIGHT)) {
         if (key_down & (1 << KEY_RIGHT)) {
           palette_phase_shift_forward = !palette_phase_shift_forward;
         }
         if (palette_phase_shift_forward) {
-          app.set_palette_phase(app.get_palette_phase() + 1);
+          renderer.set_palette_phase(renderer.get_palette_phase() + 1);
         } else {
-          app.set_palette_phase(app.get_palette_phase() - 1);
+          renderer.set_palette_phase(renderer.get_palette_phase() - 1);
         }
       }
     }
 
-    if (!app.is_busy()) {
+    if (!renderer.is_busy()) {
       if (ctrl_pressed) {
         // change iteration count
         if (key_down & (1 << KEY_DOWN)) {
-          app.set_max_iter(app.get_max_iter() - 100);
+          renderer.set_max_iter(renderer.get_max_iter() - 100);
         } else if (key_down & (1 << KEY_UP)) {
-          app.set_max_iter(app.get_max_iter() + 100);
+          renderer.set_max_iter(renderer.get_max_iter() + 100);
         }
       } else {
         // scroll
@@ -104,15 +104,15 @@ int main() {
           scroll_delta.y = 0;
         }
         if (scroll_delta.x != 0 || scroll_delta.y != 0) {
-          app.scroll(scroll_delta.x, scroll_delta.y);
+          renderer.scroll(scroll_delta.x, scroll_delta.y);
         }
       }
 
       // zoom
       if (key_down & (1 << KEY_A)) {
-        app.zoom_in(now_ms);
+        renderer.zoom_in(now_ms);
       } else if (key_down & (1 << KEY_B)) {
-        app.zoom_out(now_ms);
+        renderer.zoom_out(now_ms);
       }
     }
 
@@ -121,8 +121,8 @@ int main() {
     }
 
     feed();
-    engines[0].service();
-    app.service(now_ms);
+    workers[0].service();
+    renderer.service(now_ms);
 
     paint();
 
@@ -134,17 +134,17 @@ int main() {
 
 static void core1_main() {
   while (true) {
-    engines[1].service();
+    workers[1].service();
   }
 }
 
 static void paint() {
-  if (!app.is_repaint_requested()) {
+  if (!renderer.is_repaint_requested()) {
     return;
   }
-  app.paint_start();
+  renderer.paint_start();
   for (fb::pos_t y = 0; y < HEIGHT; y++) {
-    app.paint_line(y, line_buff);
+    renderer.paint_line(y, line_buff);
     if (y > 0) DispStopImg();
     DispStartImg(0, WIDTH, y, y + 1);
     for (fb::pos_t x = 0; x < WIDTH; x++) {
@@ -152,20 +152,20 @@ static void paint() {
     }
   }
   DispStopImg();
-  app.paint_finished();
+  renderer.paint_finished();
 }
 
 static fb::result_t feed() {
   bool stall = false;
-  int n = app.num_queued();
+  int n = renderer.num_queued();
   while (n-- > 0 && !stall) {
     stall = true;
-    for (int i = 0; i < NUM_ENGINES; i++) {
-      fb::Engine &e = engines[feed_index];
-      feed_index = (feed_index + 1) % NUM_ENGINES;
+    for (int i = 0; i < NUM_WORKERS; i++) {
+      fb::Worker &w = workers[feed_index];
+      feed_index = (feed_index + 1) % NUM_WORKERS;
       fb::vec_t loc;
-      if (!e.full() && app.dequeue(&loc)) {
-        FIXBROT_TRY(e.dispatch(loc));
+      if (!w.full() && renderer.dequeue(&loc)) {
+        FIXBROT_TRY(w.dispatch(loc));
         stall = false;
         break;
       }
@@ -177,8 +177,8 @@ static fb::result_t feed() {
 void fixbrot::on_render_start(fb::scene_t &scene) {
   t_start = Time64();
   LedOn(LED1);
-  for (int i = 0; i < NUM_ENGINES; i++) {
-    engines[i].init(scene);
+  for (int i = 0; i < NUM_WORKERS; i++) {
+    workers[i].init(scene);
   }
 }
 
@@ -188,9 +188,9 @@ void fixbrot::on_render_finished(fb::result_t res) {
 }
 
 bool fixbrot::on_collect(fb::cell_t *resp) {
-  if (engines[0].num_processed() > engines[1].num_processed()) {
-    return engines[0].collect(resp);
+  if (workers[0].num_processed() > workers[1].num_processed()) {
+    return workers[0].collect(resp);
   } else {
-    return engines[1].collect(resp);
+    return workers[1].collect(resp);
   }
 }

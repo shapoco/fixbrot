@@ -1,5 +1,5 @@
-#ifndef FIXBROT_HPP
-#define FIXBROT_HPP
+#ifndef FIXBROT_RENDERER_HPP
+#define FIXBROT_RENDERER_HPP
 
 #ifndef FIXBROT_NO_STDLIB
 #include <stdint.h>
@@ -8,7 +8,6 @@
 
 #include "fixbrot/array_queue.hpp"
 #include "fixbrot/common.hpp"
-#include "fixbrot/engine.hpp"
 
 namespace fixbrot {
 
@@ -17,7 +16,7 @@ void on_render_finished(result_t res);
 bool on_collect(cell_t *resp);
 
 template <pos_t prm_WIDTH, pos_t prm_HEIGHT>
-class App {
+class Renderer {
  public:
   static constexpr pos_t SCREEN_W = prm_WIDTH;
   static constexpr pos_t SCREEN_H = prm_HEIGHT;
