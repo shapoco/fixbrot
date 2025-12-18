@@ -49,6 +49,10 @@ class Renderer {
   float paint_scale = 1.0f;
 
  public:
+  real_t get_center_re() const { return center_re; }
+  real_t get_center_im() const { return center_im; }
+  int get_scale_exp() const { return scale_exp; }
+
   result_t init(uint64_t now_ms) {
     last_ms = now_ms;
 
@@ -208,7 +212,7 @@ class Renderer {
 
   result_t zoom_out(uint64_t now_ms) {
     if (is_busy()) return result_t::ERROR_BUSY;
-    if (scale_exp <= -3) return result_t::SUCCESS;
+    if (scale_exp <= MIN_SCALE_EXP) return result_t::SUCCESS;
 
     scale_exp--;
     bool last_is_fixed32 = pixel_step.is_fixed32();
@@ -313,6 +317,8 @@ class Renderer {
     paint_requested = true;
   }
 
+  FIXBROT_INLINE int get_palette_size() const { return palette_size; }
+
   FIXBROT_INLINE int get_palette_phase() const { return palette_phase; }
 
   void set_palette_phase(int phase) {
@@ -347,34 +353,36 @@ class Renderer {
     return result_t::SUCCESS;
   }
 
-  result_t paint_line(pos_t y, col_t *line_buff) {
-    pos_t sy = y;
+  result_t paint_line(pos_t x_offset, pos_t y_offset, pos_t width,
+                      col_t *line_buff) {
+    pos_t sy = y_offset;
     if (paint_scale != 1.0f) {
-      sy = (pos_t)((y - SCREEN_H / 2) * paint_scale + (SCREEN_H / 2));
+      sy = (pos_t)((y_offset - SCREEN_H / 2) * paint_scale + (SCREEN_H / 2));
       if (paint_scale > 1.0f) {
         sy = (sy / 2) * 2;
       }
     }
 
-    for (pos_t x = 0; x < SCREEN_W; x++) {
+    for (pos_t ix = 0; ix < width; ix++) {
+      pos_t x = x_offset + ix;
       pos_t sx = paint_x_buff[x];
 
       if (sx < 0 || sx >= SCREEN_W || sy < 0 || sy >= SCREEN_H) {
-        line_buff[x] = 0x0000;
+        line_buff[ix] = 0x0000;
         continue;
       }
 
       iter_t iter = work_buff[sy * SCREEN_W + sx];
       if (iter == ITER_BLANK) {
-        line_buff[x] = 0x0000;
+        line_buff[ix] = 0x0000;
       } else if (iter == ITER_QUEUED) {
-        line_buff[x] = 0xFFE0;
+        line_buff[ix] = 0xFFE0;
       } else {
         if (iter >= max_iter) {
-          line_buff[x] = max_iter_color;
+          line_buff[ix] = max_iter_color;
         } else {
           int i = (iter + palette_phase) & (palette_size - 1);
-          line_buff[x] = palette[i];
+          line_buff[ix] = palette[i];
         }
       }
     }

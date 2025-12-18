@@ -87,6 +87,66 @@ struct fixed64_t {
   FIXBROT_INLINE explicit operator fixed32_t() {
     return fixed32_t::from_raw(raw >> 32);
   }
+
+  void to_decimal_string(char *buf, int buff_size, int frac_digits = 20) {
+    int64_t tmp = raw;
+    int pos = 0;
+    if (tmp < 0) {
+      if (pos < buff_size - 1) {
+        buf[pos++] = '-';
+      } else {
+        buf[0] = '\0';
+        return;
+      }
+      tmp = -tmp;
+    }
+
+    int int_val = (int)(tmp >> FRAC_BITS);
+    tmp -= (int64_t)int_val << FRAC_BITS;
+    int int_digits = (int_val >= 100) ? 3 : (int_val >= 10) ? 2 : 1;
+    uint8_t int_buf[20];
+    for (int i = int_digits - 1; i >= 0; i--) {
+      int_buf[i] = (uint8_t)(int_val % 10);
+      int_val /= 10;
+    }
+    for (int i = 0; i < int_digits; i++) {
+      if (pos < buff_size - 1) {
+        buf[pos++] = '0' + int_buf[i];
+      } else {
+        buf[0] = '\0';
+        return;
+      }
+    }
+
+    if (frac_digits <= 0) {
+      buf[pos] = '\0';
+      return;
+    }
+
+    if (pos < buff_size - 1) {
+      buf[pos++] = '.';
+    } else {
+      buf[0] = '\0';
+      return;
+    }
+
+    for (int i = 0; i < frac_digits; i++) {
+      tmp *= 10;
+      int digit = (int)(tmp >> FRAC_BITS);
+      if (pos < buff_size - 1) {
+        buf[pos++] = '0' + digit;
+      } else {
+        buf[0] = '\0';
+        return;
+      }
+      tmp -= (int64_t)digit << FRAC_BITS;
+      // if (tmp == 0) {
+      //   break;
+      // }
+    }
+
+    buf[pos] = '\0';
+  }
 };
 
 static FIXBROT_INLINE fixed64_t operator+=(fixed64_t &a, const fixed64_t &b) {
@@ -128,6 +188,6 @@ static FIXBROT_INLINE bool operator!=(const fixed64_t &a, const fixed64_t &b) {
   return a.raw != b.raw;
 }
 
-} // namespace fixbrot
+}  // namespace fixbrot
 
 #endif

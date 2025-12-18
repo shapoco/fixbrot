@@ -31,6 +31,8 @@ function popdir() {
 
 APP_DIR=$(pwd)
 REPO_DIR=$(cd ../.. && pwd)
+SUBMODULES_DIR="${REPO_DIR}/submodules"
+ADAFRUIT_GFX_DIR="${SUBMODULES_DIR}/Adafruit-GFX-Library"
 GRPDIR=PROG
 TARGET=FIXBROT
 
@@ -53,6 +55,7 @@ pushdir "${PICOLIBSDK_PATH}/PicoPad"
   pushdir "./${GRPDIR}/${TARGET}"
     cp -rp ${LIB_DIR}/include/* "."
     cp -rp ${SRC_TARGET_DIR}/* "."
+    cp -p "${ADAFRUIT_GFX_DIR}/gfxfont.h" "."
     touch src/*.cpp
     ./c.sh "${ARG_DEVICE}"
     mkdir -p "${ARG_OUTDIR}"

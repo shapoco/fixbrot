@@ -111,6 +111,8 @@ static constexpr int BATCH_SIZE = 1 << BATCH_SIZE_CLOG2;
 static constexpr int MAX_PALETTE_SIZE = 256;
 static constexpr int MAX_PALETTE_SLOPE = 3;
 
+static constexpr int MIN_SCALE_EXP = -3;
+
 }  // namespace fixbrot
 
 #endif

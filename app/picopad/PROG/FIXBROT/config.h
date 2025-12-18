@@ -16,6 +16,8 @@
 #define USE_FRAMEBUF 0
 #define DISP_SPI_BAUD 50000000
 #define FIXBROT_NO_STDLIB
+#define SHAPOFONT_NO_STDLIB
+#define SHAPOGFX_NO_STDLIB
 
 //#define FONT			FontBold8x8	// default system font
 //#define FONTW			8		// width of system font
