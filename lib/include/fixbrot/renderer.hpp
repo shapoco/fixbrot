@@ -28,6 +28,8 @@ class Renderer {
   int busy_items = 0;
   ArrayQueue<vec_t, (SCREEN_W + SCREEN_H) * 16> queue;
   iter_t work_buff[SCREEN_W * SCREEN_H];
+
+  formula_t formula = formula_t::MANDELBROT;
   real_t center_re = -0.5f;
   real_t center_im = 0;
   int scale_exp = -2;
@@ -253,6 +255,16 @@ class Renderer {
     return result_t::SUCCESS;
   }
 
+  FIXBROT_INLINE formula_t get_formula() const { return formula; }
+
+  result_t set_formula(formula_t f) {
+    if (is_busy()) return result_t::ERROR_BUSY;
+    formula = f;
+    FIXBROT_TRY(clear_rect(rect_t{0, 0, SCREEN_W, SCREEN_H}));
+    FIXBROT_TRY(start_render());
+    return result_t::SUCCESS;
+  }
+
   FIXBROT_INLINE iter_t get_max_iter() const { return max_iter; }
 
   result_t set_max_iter(iter_t max_iter) {
@@ -440,6 +452,7 @@ class Renderer {
     }
 
     scene_t scene;
+    scene.formula = formula;
     scene.real = center_re - pixel_step * (SCREEN_W / 2);
     scene.imag = center_im - pixel_step * (SCREEN_H / 2);
     scene.step = pixel_step;

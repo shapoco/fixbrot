@@ -53,6 +53,13 @@ struct rect_t {
   FIXBROT_INLINE pos_t bottom() const { return y + h; }
 };
 
+enum class formula_t {
+  MANDELBROT,
+  BURNING_SHIP,
+  FEATHER,
+  LAST,
+};
+
 static constexpr iter_t ITER_BLANK = 0;
 static constexpr iter_t ITER_MAX = (1 << (sizeof(iter_t) * 8)) - 3;
 static constexpr iter_t ITER_QUEUED = (1 << (sizeof(iter_t) * 8)) - 2;
@@ -70,6 +77,7 @@ struct cell_t {
 };
 
 struct scene_t {
+  formula_t formula;
   real_t real;
   real_t imag;
   real_t step;
@@ -96,6 +104,13 @@ prev_palette_of(builtin_palette_t palette) {
 
 static FIXBROT_INLINE col_t pack565(uint8_t r, uint8_t g, uint8_t b) {
   return ((uint16_t)r << 11) | ((uint16_t)g << 5) | b;
+}
+
+static FIXBROT_INLINE void unpack565(col_t cpl, uint8_t *r, uint8_t *g,
+                                     uint8_t *b) {
+  *r = (cpl >> 11) & 0x1F;
+  *g = (cpl >> 5) & 0x3F;
+  *b = cpl & 0x1F;
 }
 
 template <typename T>

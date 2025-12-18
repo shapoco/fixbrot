@@ -68,19 +68,38 @@ class Worker {
     int n = num_queued();
     vec_t loc;
     while (n-- > 0 && fetch(&loc)) {
-      real_t re = scene.real + scene.step * loc.x;
-      real_t im = scene.imag + scene.step * loc.y;
+      real_t re64 = scene.real + scene.step * loc.x;
+      real_t im64 = scene.imag + scene.step * loc.y;
+      iter_t max_iter = scene.max_iter;
 
       cell_t resp;
       resp.loc = loc;
       if (scene.step.is_fixed32()) {
-        fixed32_t a = (fixed32_t)re;
-        fixed32_t b = (fixed32_t)im;
-        resp.iter = mandelbrot32(a, b);
+        fixed32_t re32 = (fixed32_t)re64;
+        fixed32_t im32 = (fixed32_t)im64;
+        switch (scene.formula) {
+          case formula_t::BURNING_SHIP:
+            resp.iter = burning_ship32(re32, im32, max_iter);
+            break;
+          case formula_t::FEATHER:
+            resp.iter = feather32(re32, im32, max_iter);
+            break;
+          default:  // formula_t::MANDELBROT:
+            resp.iter = mandelbrot32(re32, im32, max_iter);
+            break;
+        }
       } else {
-        fixed64_t a = re;
-        fixed64_t b = im;
-        resp.iter = mandelbrot64(a, b);
+        switch (scene.formula) {
+          case formula_t::BURNING_SHIP:
+            resp.iter = burning_ship64(re64, im64, max_iter);
+            break;
+          case formula_t::FEATHER:
+            resp.iter = max_iter;  // not implemented yet
+            break;
+          default:  // formula_t::MANDELBROT:
+            resp.iter = mandelbrot64(re64, im64, max_iter);
+            break;
+        }
       }
       if (resp.iter == scene.max_iter) {
         resp.iter = ITER_MAX;
@@ -104,13 +123,13 @@ class Worker {
     proc_ptr = (pp + 1) & (DEPTH - 1);
   }
 
-  iter_t mandelbrot64(fixed64_t a, fixed64_t b) {
+  static iter_t mandelbrot64(fixed64_t a, fixed64_t b, iter_t max_iter) {
     fixed64_t x = 0;
     fixed64_t y = 0;
     fixed64_t xx = 0;
     fixed64_t yy = 0;
     iter_t iter = 0;
-    while (++iter < scene.max_iter && (xx + yy).int_part() < 4) {
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
       y = x * y * 2 + b;
       x = xx - yy + a;
       xx = x.square();
@@ -119,15 +138,73 @@ class Worker {
     return iter;
   }
 
-  iter_t mandelbrot32(fixed32_t a, fixed32_t b) {
+  static iter_t mandelbrot32(fixed32_t a, fixed32_t b, iter_t max_iter) {
     fixed32_t x = 0;
     fixed32_t y = 0;
     fixed32_t xx = 0;
     fixed32_t yy = 0;
     iter_t iter = 0;
-    while (++iter < scene.max_iter && (xx + yy).int_part() < 4) {
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
       y = x * y * 2 + b;
       x = xx - yy + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t burning_ship64(fixed64_t a, fixed64_t b, iter_t max_iter) {
+    fixed64_t x = 0;
+    fixed64_t y = 0;
+    fixed64_t xx = 0;
+    fixed64_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      fixed64_t xy = x * y;
+      if (xy < 0) xy = -xy;
+      y = xy * 2 + b;
+      x = xx - yy + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t burning_ship32(fixed32_t a, fixed32_t b, iter_t max_iter) {
+    fixed32_t x = 0;
+    fixed32_t y = 0;
+    fixed32_t xx = 0;
+    fixed32_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      fixed32_t xy = x * y;
+      if (xy < 0) xy = -xy;
+      y = xy * 2 + b;
+      x = xx - yy + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t feather32(fixed32_t a, fixed32_t b, iter_t max_iter) {
+    fixed32_t x = 0;
+    fixed32_t y = 0;
+    fixed32_t xx = 0;
+    fixed32_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 8) {
+      fixed32_t xxx = xx * x;
+      fixed32_t yyy = yy * y;
+      fixed32_t xyy = x * yy;
+      fixed32_t yxx = y * xx;
+      fixed32_t p = xxx - xyy * 3;
+      fixed32_t q = yxx * 3 - yyy;
+      fixed32_t r = xx + 1;
+      fixed32_t s = yy;
+      fixed32_t dsor = r.square() + s.square();
+      x = (p * r + q * s) / dsor + a;
+      y = (q * r - p * s) / dsor + b;
       xx = x.square();
       yy = y.square();
     }
