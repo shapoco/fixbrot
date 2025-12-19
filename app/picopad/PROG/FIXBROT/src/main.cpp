@@ -19,7 +19,7 @@ enum class menu_key_t {
   SCENE_IMAG,
   SCENE_ZOOM,
   SCENE_ITER,
-  PALETTE_MODE,
+  PALETTE_TYPE,
   PALETTE_SLOPE,
   PALETTE_PHASE,
   LAST,
@@ -39,10 +39,6 @@ static constexpr uint16_t NUM_WORKERS = 2;
 static constexpr int MENU_WIDTH = WIDTH / 2;
 
 static constexpr int PADDING = 5;
-// static constexpr int CHAR_WIDTH = 8;
-// static constexpr int LINE_HEIGHT = 16;
-// static constexpr uint16_t FORE_COLOR = COLOR(240, 240, 240);
-// static constexpr uint16_t BACK_COLOR = COLOR(16, 16, 16);
 
 static const uint16_t MENU_PALETTE[4] = {
     COLOR(16, 16, 16),
@@ -66,7 +62,7 @@ menu_item_t menu_items[] = {
     {menu_key_t::SCENE_ITER, 40, 1, "Iter", ""},
     {menu_key_t::BLANK, 0, 1, "", ""},
     {menu_key_t::CAPTION, 0, 1, "PALETTE", ""},
-    {menu_key_t::PALETTE_MODE, 50, 1, "Mode", ""},
+    {menu_key_t::PALETTE_TYPE, 50, 1, "Type", ""},
     {menu_key_t::PALETTE_SLOPE, 50, 1, "Slope", ""},
     {menu_key_t::PALETTE_PHASE, 50, 1, "Phase", ""},
 };
@@ -78,7 +74,7 @@ static fb::Worker workers[NUM_WORKERS];
 static fb::Gray2Bitmap menu_bmp(MENU_WIDTH, HEIGHT);
 
 static fb::builtin_palette_t palette = fb::builtin_palette_t::HEATMAP;
-static int palette_slope = 0;
+static int palette_slope = fb::DEFAULT_PALETTE_SLOPE;
 static bool palette_phase_shift_forward = true;
 
 static int feed_index = 0;
@@ -89,11 +85,14 @@ static bool ctrl_pressed = false;
 static bool ctrl_holded = false;
 
 static bool paint_requested = false;
-static menu_mode_t menu_mode = menu_mode_t::HIDDEN;
-static menu_key_t menu_cursor = menu_key_t::SCENE_REAL;
+static bool menu_open = false;
+static menu_key_t menu_cursor = (menu_key_t)0;
+static int menu_pos = 0;
 
 static uint64_t t_start = 0;
 static uint64_t t_elapsed = 0;
+
+static volatile bool busy = false;
 
 static void core1_main();
 static void paint();
@@ -123,6 +122,8 @@ int main() {
     uint16_t key_up = (~key_pressed) & last_pressed;
     last_pressed = key_pressed;
 
+    busy = !!key_pressed || renderer.is_busy();
+
     constexpr uint16_t EXCEPT_X = (1 << KEY_LEFT) | (1 << KEY_RIGHT) |
                                   (1 << KEY_UP) | (1 << KEY_DOWN) |
                                   (1 << KEY_A) | (1 << KEY_B) | (1 << KEY_Y);
@@ -133,7 +134,7 @@ int main() {
       }
     } else {
       if ((key_up & (1 << KEY_X)) && !ctrl_holded) {
-        menu_mode = menu_mode_t((int(menu_mode) + 1) % int(menu_mode_t::LAST));
+        menu_open = !menu_open;
         paint_requested = true;
       }
       if ((key_pressed & EXCEPT_X) == 0) {
@@ -142,7 +143,7 @@ int main() {
       ctrl_holded = false;
     }
 
-    if (menu_mode == menu_mode_t::OPERATE) {
+    if (menu_open) {
       if (key_down & (1 << KEY_UP)) {
         menu_cursor =
             menu_key_t((int(menu_cursor) - 1 + int(menu_key_t::LAST)) %
@@ -191,7 +192,7 @@ int main() {
             renderer.set_max_iter(renderer.get_max_iter() + inc_dec * 100);
             break;
 
-          case menu_key_t::PALETTE_MODE:
+          case menu_key_t::PALETTE_TYPE:
             if (inc_dec > 0) {
               palette = fb::next_palette_of(palette);
             } else {
@@ -284,6 +285,9 @@ int main() {
 
     paint();
 
+    if (!busy) {
+      WaitMs(20);
+    }
     // char buf[64];
     // snprintf(buf, sizeof(buf), "Time: %llu us", t_elapsed);
     // DispDrawText(buf, 0, 0, 0, 0, 0xFFFF, 0x0000);
@@ -292,6 +296,9 @@ int main() {
 
 static void core1_main() {
   while (true) {
+    if (!busy) {
+      WaitMs(20);
+    }
     workers[1].service();
   }
 }
@@ -304,27 +311,34 @@ static void paint() {
   }
   paint_requested = false;
 
-  if (menu_mode != menu_mode_t::HIDDEN) {
+  if (menu_open) {
     update_menu();
   }
 
   {
     int canvas_sx = 0;
-    int split_x = 0;
     int canvas_w = WIDTH;
-    if (menu_mode != menu_mode_t::HIDDEN) {
-      canvas_w = WIDTH - MENU_WIDTH;
-      split_x = WIDTH - canvas_w;
-      canvas_sx = split_x / 2;
+    if (menu_open) {
+      if (menu_pos < MENU_WIDTH) {
+        menu_pos += (MENU_WIDTH - menu_pos) * 3 / 4 + 1;
+        paint_requested = true;
+      }
+    } else {
+      if (menu_pos > 0) {
+        menu_pos /= 4;
+        paint_requested = true;
+      }
     }
+    canvas_w = WIDTH - menu_pos;
+    canvas_sx = menu_pos / 2;
 
     renderer.paint_start();
-    DispStartImg(split_x, WIDTH, 0, HEIGHT);
+    DispStartImg(menu_pos, WIDTH, 0, HEIGHT);
     for (fb::pos_t y = 0; y < HEIGHT; y++) {
       renderer.paint_line(canvas_sx, y, canvas_w, line_buff);
 
-      if (menu_mode != menu_mode_t::HIDDEN) {
-        constexpr int SHADOW_SIZE = 8;
+      if (menu_pos > 0) {
+        constexpr int SHADOW_SIZE = 16;
         for (int i = 0; i < SHADOW_SIZE; i++) {
           int coeff = 256 - (SHADOW_SIZE - i) * (SHADOW_SIZE - i) * 256 /
                                 (SHADOW_SIZE * SHADOW_SIZE);
@@ -344,11 +358,12 @@ static void paint() {
     DispStopImg();
     renderer.paint_finished();
 
-    if (menu_mode != menu_mode_t::HIDDEN && split_x > 0) {
-      DispStartImg(0, split_x, 0, HEIGHT);
+    if (menu_pos > 0) {
+      DispStartImg(0, menu_pos, 0, HEIGHT);
       for (fb::pos_t y = 0; y < HEIGHT; y++) {
-        menu_bmp.render_to(0, y, split_x, 1, line_buff, WIDTH, MENU_PALETTE);
-        for (fb::pos_t x = 0; x < split_x; x++) {
+        menu_bmp.render_to(MENU_WIDTH - menu_pos, y, menu_pos, 1, line_buff,
+                           WIDTH, MENU_PALETTE);
+        for (fb::pos_t x = 0; x < menu_pos; x++) {
           DispSendImg2(line_buff[x]);
         }
       }
@@ -380,9 +395,27 @@ static void update_menu() {
           case fb::formula_t::BURNING_SHIP:
             strncpy(item.value_text, "Burning Ship", sizeof(item.value_text));
             break;
-          case fb::formula_t::FEATHER:
-            strncpy(item.value_text, "Feather Fractal",
+          case fb::formula_t::CELTIC:
+            strncpy(item.value_text, "Celtic", sizeof(item.value_text));
+            break;
+          case fb::formula_t::BUFFALO:
+            strncpy(item.value_text, "Buffalo", sizeof(item.value_text));
+            break;
+          case fb::formula_t::PERP_BURNING_SHIP:
+            strncpy(item.value_text, "Perp. Burning Ship",
                     sizeof(item.value_text));
+            break;
+          case fb::formula_t::AIRSHIP:
+            strncpy(item.value_text, "Airship", sizeof(item.value_text));
+            break;
+          case fb::formula_t::SHARK_FIN:
+            strncpy(item.value_text, "Shark Fin", sizeof(item.value_text));
+            break;
+          case fb::formula_t::POWER_DRILL:
+            strncpy(item.value_text, "Power Drill", sizeof(item.value_text));
+            break;
+          case fb::formula_t::FEATHER:
+            strncpy(item.value_text, "Feather", sizeof(item.value_text));
             break;
           default:  // fb::formula_t::MANDELBROT:
             strncpy(item.value_text, "Mandelbrot", sizeof(item.value_text));
@@ -410,7 +443,7 @@ static void update_menu() {
                  renderer.get_max_iter());
         break;
 
-      case menu_key_t::PALETTE_MODE:
+      case menu_key_t::PALETTE_TYPE:
         snprintf(item.value_text, sizeof(item.value_text), "%d", (int)palette);
         break;
 
@@ -437,7 +470,7 @@ static void update_menu() {
     } else {
       uint8_t label_color = MENU_LABEL;
       uint8_t value_color = MENU_VALUE;
-      if (menu_mode == menu_mode_t::OPERATE && menu_cursor == item.key) {
+      if (menu_cursor == item.key) {
         menu_bmp.fill_rect(0, y, MENU_WIDTH, line_height * item.value_lines - 1,
                            MENU_ACTIVE);
         label_color = MENU_BACK;

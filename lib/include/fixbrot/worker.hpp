@@ -81,6 +81,24 @@ class Worker {
           case formula_t::BURNING_SHIP:
             resp.iter = burning_ship32(re32, im32, max_iter);
             break;
+          case formula_t::CELTIC:
+            resp.iter = celtic32(re32, im32, max_iter);
+            break;
+          case formula_t::BUFFALO:
+            resp.iter = buffalo32(re32, im32, max_iter);
+            break;
+          case formula_t::PERP_BURNING_SHIP:
+            resp.iter = perp_burning_ship32(re32, im32, max_iter);
+            break;
+          case formula_t::AIRSHIP:
+            resp.iter = airship32(re32, im32, max_iter);
+            break;
+          case formula_t::SHARK_FIN:
+            resp.iter = shark_fin32(re32, im32, max_iter);
+            break;
+          case formula_t::POWER_DRILL:
+            resp.iter = power_drill32(re32, im32, max_iter);
+            break;
           case formula_t::FEATHER:
             resp.iter = feather32(re32, im32, max_iter);
             break;
@@ -92,6 +110,24 @@ class Worker {
         switch (scene.formula) {
           case formula_t::BURNING_SHIP:
             resp.iter = burning_ship64(re64, im64, max_iter);
+            break;
+          case formula_t::CELTIC:
+            resp.iter = celtic64(re64, im64, max_iter);
+            break;
+          case formula_t::BUFFALO:
+            resp.iter = buffalo64(re64, im64, max_iter);
+            break;
+          case formula_t::PERP_BURNING_SHIP:
+            resp.iter = perp_burning_ship64(re64, im64, max_iter);
+            break;
+          case formula_t::AIRSHIP:
+            resp.iter = airship64(re64, im64, max_iter);
+            break;
+          case formula_t::SHARK_FIN:
+            resp.iter = shark_fin64(re64, im64, max_iter);
+            break;
+          case formula_t::POWER_DRILL:
+            resp.iter = power_drill64(re64, im64, max_iter);
             break;
           case formula_t::FEATHER:
             resp.iter = max_iter;  // not implemented yet
@@ -160,9 +196,7 @@ class Worker {
     fixed64_t yy = 0;
     iter_t iter = 0;
     while (++iter < max_iter && (xx + yy).int_part() < 4) {
-      fixed64_t xy = x * y;
-      if (xy < 0) xy = -xy;
-      y = xy * 2 + b;
+      y = (x * y * 2).abs() + b;
       x = xx - yy + a;
       xx = x.square();
       yy = y.square();
@@ -177,9 +211,201 @@ class Worker {
     fixed32_t yy = 0;
     iter_t iter = 0;
     while (++iter < max_iter && (xx + yy).int_part() < 4) {
-      fixed32_t xy = x * y;
-      if (xy < 0) xy = -xy;
-      y = xy * 2 + b;
+      y = (x * y * 2).abs() + b;
+      x = xx - yy + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t celtic64(fixed64_t a, fixed64_t b, iter_t max_iter) {
+    fixed64_t x = 0;
+    fixed64_t y = 0;
+    fixed64_t xx = 0;
+    fixed64_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      y = x * y * 2 + b;
+      x = (xx - yy).abs() + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t celtic32(fixed32_t a, fixed32_t b, iter_t max_iter) {
+    fixed32_t x = 0;
+    fixed32_t y = 0;
+    fixed32_t xx = 0;
+    fixed32_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      y = x * y * 2 + b;
+      x = (xx - yy).abs() + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t buffalo64(fixed64_t a, fixed64_t b, iter_t max_iter) {
+    fixed64_t x = 0;
+    fixed64_t y = 0;
+    fixed64_t xx = 0;
+    fixed64_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      y = (x * y).abs() * -2 + b;
+      x = (xx - yy).abs() + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t buffalo32(fixed32_t a, fixed32_t b, iter_t max_iter) {
+    fixed32_t x = 0;
+    fixed32_t y = 0;
+    fixed32_t xx = 0;
+    fixed32_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      y = (x * y).abs() * -2 + b;
+      x = (xx - yy).abs() + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t perp_burning_ship64(fixed64_t a, fixed64_t b, iter_t max_iter) {
+    fixed64_t x = 0;
+    fixed64_t y = 0;
+    fixed64_t xx = 0;
+    fixed64_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      y = x * y.abs() * 2 + b;
+      x = xx - yy + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t perp_burning_ship32(fixed32_t a, fixed32_t b, iter_t max_iter) {
+    fixed32_t x = 0;
+    fixed32_t y = 0;
+    fixed32_t xx = 0;
+    fixed32_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      y = x * y.abs() * 2 + b;
+      x = xx - yy + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t airship64(fixed64_t a, fixed64_t b, iter_t max_iter) {
+    fixed64_t x = 0;
+    fixed64_t y = 0;
+    fixed64_t xx = 0;
+    fixed64_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      if (y >= 0) {
+        y = x * y * 2 + b;
+        x = xx - yy + a;
+      } else {
+        y = x * y * -2 + b;
+        x = xx + yy + a;
+      }
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t airship32(fixed32_t a, fixed32_t b, iter_t max_iter) {
+    fixed32_t x = 0;
+    fixed32_t y = 0;
+    fixed32_t xx = 0;
+    fixed32_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      if (y >= 0) {
+        y = x * y * 2 + b;
+        x = xx - yy + a;
+      } else {
+        y = x * y * -2 + b;
+        x = xx + yy + a;
+      }
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t shark_fin64(fixed64_t a, fixed64_t b, iter_t max_iter) {
+    fixed64_t x = 0;
+    fixed64_t y = 0;
+    fixed64_t xx = 0;
+    fixed64_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      if (y < 0) yy = -yy;
+      y = x * y * 2 + b;
+      x = xx - yy + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t shark_fin32(fixed32_t a, fixed32_t b, iter_t max_iter) {
+    fixed32_t x = 0;
+    fixed32_t y = 0;
+    fixed32_t xx = 0;
+    fixed32_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      if (y < 0) yy = -yy;
+      y = x * y * 2 + b;
+      x = xx - yy + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t power_drill64(fixed64_t a, fixed64_t b, iter_t max_iter) {
+    fixed64_t x = 0;
+    fixed64_t y = 0;
+    fixed64_t xx = 0;
+    fixed64_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      if (y < 0) yy = -yy;
+      y = x * y * -2 + b;
+      x = xx - yy + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t power_drill32(fixed32_t a, fixed32_t b, iter_t max_iter) {
+    fixed32_t x = 0;
+    fixed32_t y = 0;
+    fixed32_t xx = 0;
+    fixed32_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      if (y < 0) yy = -yy;
+      y = x * y * -2 + b;
       x = xx - yy + a;
       xx = x.square();
       yy = y.square();
@@ -202,9 +428,9 @@ class Worker {
       fixed32_t q = yxx * 3 - yyy;
       fixed32_t r = xx + 1;
       fixed32_t s = yy;
-      fixed32_t dsor = r.square() + s.square();
-      x = (p * r + q * s) / dsor + a;
-      y = (q * r - p * s) / dsor + b;
+      fixed32_t dsor = (r.square() + s.square()).inverse();
+      x = (p * r + q * s) * dsor + a;
+      y = (q * r - p * s) * dsor + b;
       xx = x.square();
       yy = y.square();
     }

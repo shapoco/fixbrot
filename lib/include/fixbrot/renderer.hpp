@@ -69,10 +69,11 @@ class Renderer {
     }
     update_pixel_step();
 
-    palette_load_heatmap(0);
+    palette_load_heatmap(DEFAULT_PALETTE_SLOPE);
 
     FIXBROT_TRY(clear_rect(rect_t{0, 0, SCREEN_W, SCREEN_H}));
     FIXBROT_TRY(start_render());
+    paint_requested = true;
 
     return result_t::SUCCESS;
   }
@@ -262,6 +263,7 @@ class Renderer {
     formula = f;
     FIXBROT_TRY(clear_rect(rect_t{0, 0, SCREEN_W, SCREEN_H}));
     FIXBROT_TRY(start_render());
+    paint_requested = true;
     return result_t::SUCCESS;
   }
 

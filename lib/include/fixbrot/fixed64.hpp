@@ -27,6 +27,10 @@ struct fixed64_t {
 
   FIXBROT_INLINE int int_part() const { return raw >> FRAC_BITS; }
 
+  FIXBROT_INLINE fixed64_t abs() const {
+    return (raw < 0) ? fixed64_t::from_raw(-raw) : *this;
+  }
+
   FIXBROT_INLINE fixed64_t square() const {
     uint64_t a = (raw < 0) ? -raw : raw;
     a <<= (FIXED_INT_BITS / 2);

@@ -27,11 +27,20 @@ struct fixed32_t {
 
   FIXBROT_INLINE int int_part() const { return raw >> FRAC_BITS; }
 
+  FIXBROT_INLINE fixed32_t abs() const {
+    return (raw < 0) ? fixed32_t::from_raw(-raw) : *this;
+  }
+
   FIXBROT_INLINE fixed32_t square() const {
     int32_t a = raw << (FIXED_INT_BITS / 2);
     int64_t result = a;
     result *= a;
     return fixed32_t::from_raw((int32_t)(result >> 32));
+  }
+
+  FIXBROT_INLINE fixed32_t inverse() const {
+    int64_t dividend = (int64_t)1ull << (FRAC_BITS * 2);
+    return fixed32_t::from_raw((int32_t)(dividend / raw));
   }
 
   FIXBROT_INLINE fixed32_t operator-() const {

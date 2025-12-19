@@ -56,6 +56,12 @@ struct rect_t {
 enum class formula_t {
   MANDELBROT,
   BURNING_SHIP,
+  CELTIC,
+  BUFFALO,
+  PERP_BURNING_SHIP,
+  AIRSHIP,
+  SHARK_FIN,
+  POWER_DRILL,
   FEATHER,
   LAST,
 };
@@ -123,8 +129,9 @@ static FIXBROT_INLINE T clamp(T min, T max, T val) {
 static constexpr int BATCH_SIZE_CLOG2 = 8;
 static constexpr int BATCH_SIZE = 1 << BATCH_SIZE_CLOG2;
 
-static constexpr int MAX_PALETTE_SIZE = 256;
-static constexpr int MAX_PALETTE_SLOPE = 3;
+static constexpr int MAX_PALETTE_SIZE = (1 << 9);
+static constexpr int MAX_PALETTE_SLOPE = 4;
+static constexpr int DEFAULT_PALETTE_SLOPE = 2;
 
 static constexpr int MIN_SCALE_EXP = -3;
 
