@@ -99,6 +99,12 @@ class Worker {
           case formula_t::POWER_DRILL:
             resp.iter = power_drill32(re32, im32, max_iter);
             break;
+          case formula_t::CROWN:
+            resp.iter = crown32(re32, im32, max_iter);
+            break;
+          case formula_t::SUPER:
+            resp.iter = super32(re32, im32, max_iter);
+            break;
           case formula_t::FEATHER:
             resp.iter = feather32(re32, im32, max_iter);
             break;
@@ -128,6 +134,12 @@ class Worker {
             break;
           case formula_t::POWER_DRILL:
             resp.iter = power_drill64(re64, im64, max_iter);
+            break;
+          case formula_t::CROWN:
+            resp.iter = crown64(re64, im64, max_iter);
+            break;
+          case formula_t::SUPER:
+            resp.iter = super64(re64, im64, max_iter);
             break;
           case formula_t::FEATHER:
             resp.iter = max_iter;  // not implemented yet
@@ -407,6 +419,84 @@ class Worker {
       if (y < 0) yy = -yy;
       y = x * y * -2 + b;
       x = xx - yy + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t super64(fixed64_t a, fixed64_t b, iter_t max_iter) {
+    fixed64_t x = 0;
+    fixed64_t y = 0;
+    fixed64_t xx = 0;
+    fixed64_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      if (y < 0) {
+        y = -y;
+        yy = -yy;
+      }
+      y = x * y * 2 + b;
+      if (x >= 0) xx = -xx;
+      x = xx - yy + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t super32(fixed32_t a, fixed32_t b, iter_t max_iter) {
+    fixed32_t x = 0;
+    fixed32_t y = 0;
+    fixed32_t xx = 0;
+    fixed32_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      if (y < 0) {
+        y = -y;
+        yy = -yy;
+      }
+      y = x * y * 2 + b;
+      if (x >= 0) xx = -xx;
+      x = xx - yy + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t crown64(fixed64_t a, fixed64_t b, iter_t max_iter) {
+    fixed64_t x = 0;
+    fixed64_t y = 0;
+    fixed64_t xx = 0;
+    fixed64_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      if (x < 0) {
+        x = -x;
+        xx = -xx;
+      }
+      y = x * y * -2 + b;
+      x = (xx - yy).abs() + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t crown32(fixed32_t a, fixed32_t b, iter_t max_iter) {
+    fixed32_t x = 0;
+    fixed32_t y = 0;
+    fixed32_t xx = 0;
+    fixed32_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      if (x < 0) {
+        x = -x;
+        xx = -xx;
+      }
+      y = x * y * -2 + b;
+      x = (xx - yy).abs() + a;
       xx = x.square();
       yy = y.square();
     }

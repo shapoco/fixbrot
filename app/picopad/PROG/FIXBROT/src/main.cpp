@@ -414,6 +414,12 @@ static void update_menu() {
           case fb::formula_t::POWER_DRILL:
             strncpy(item.value_text, "Power Drill", sizeof(item.value_text));
             break;
+          case fb::formula_t::CROWN:
+            strncpy(item.value_text, "Crown", sizeof(item.value_text));
+            break;
+          case fb::formula_t::SUPER:
+            strncpy(item.value_text, "Super", sizeof(item.value_text));
+            break;
           case fb::formula_t::FEATHER:
             strncpy(item.value_text, "Feather", sizeof(item.value_text));
             break;

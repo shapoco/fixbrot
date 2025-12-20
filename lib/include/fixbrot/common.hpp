@@ -62,6 +62,8 @@ enum class formula_t {
   AIRSHIP,
   SHARK_FIN,
   POWER_DRILL,
+  CROWN,
+  SUPER,
   FEATHER,
   LAST,
 };
@@ -70,6 +72,9 @@ static constexpr iter_t ITER_BLANK = 0;
 static constexpr iter_t ITER_MAX = (1 << (sizeof(iter_t) * 8)) - 3;
 static constexpr iter_t ITER_QUEUED = (1 << (sizeof(iter_t) * 8)) - 2;
 static constexpr iter_t ITER_WALL = (1 << (sizeof(iter_t) * 8)) - 1;
+
+static constexpr int COARSE_POS_BITS = 4;
+static constexpr pos_t COARSE_POS_STEP = 1 << COARSE_POS_BITS;
 
 struct cell_t {
   vec_t loc;

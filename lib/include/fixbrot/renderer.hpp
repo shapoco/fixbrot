@@ -45,7 +45,8 @@ class Renderer {
   int palette_size = MAX_PALETTE_SIZE;
 
   bool paint_requested = false;
-  bool paint_zooming_in = 0;
+  bool paint_zoom_inprog = false;
+  bool paint_zoom_dir_in = false;
   uint64_t paint_zoom_end_ms = 0;
   pos_t paint_x_buff[SCREEN_W];
   float paint_scale = 1.0f;
@@ -88,14 +89,17 @@ class Renderer {
 
     // zoom animation
     paint_scale = 1.0f;
-    if (now_ms < paint_zoom_end_ms) {
-      uint32_t t = (uint32_t)(paint_zoom_end_ms - now_ms);
-      if (paint_zooming_in) {
+    if (paint_zoom_inprog) {
+      int32_t t = (int32_t)(paint_zoom_end_ms - now_ms);
+      if (t < 0) {
+        t = 0;
+        paint_zoom_inprog = false;
+      }
+      paint_requested = true;
+      if (paint_zoom_dir_in) {
         paint_scale = 1.0f + (float)t / ZOOM_DURATION_MS;
-        paint_requested = true;
       } else {
         paint_scale = 1.0f - (float)t / (ZOOM_DURATION_MS * 2);
-        paint_requested = true;
       }
     }
 
@@ -206,8 +210,9 @@ class Renderer {
     }
     FIXBROT_TRY(start_render());
 
+    paint_zoom_inprog = true;
+    paint_zoom_dir_in = true;
     paint_zoom_end_ms = now_ms + ZOOM_DURATION_MS;
-    paint_zooming_in = true;
     paint_requested = true;
 
     return result_t::SUCCESS;
@@ -249,8 +254,9 @@ class Renderer {
       FIXBROT_TRY(scan_hori(rect.x, rect.bottom() - 1, rect.bottom(), rect.w));
     }
 
+    paint_zoom_inprog = true;
     paint_zoom_end_ms = now_ms + ZOOM_DURATION_MS;
-    paint_zooming_in = false;
+    paint_zoom_dir_in = false;
     paint_requested = true;
 
     return result_t::SUCCESS;
@@ -358,9 +364,6 @@ class Renderer {
       pos_t sx = x;
       if (paint_scale != 1.0f) {
         sx = (pos_t)((x - SCREEN_W / 2) * paint_scale + (SCREEN_W / 2));
-        if (paint_scale > 1.0f) {
-          sx = (sx / 2) * 2;
-        }
       }
       paint_x_buff[x] = sx;
     }
@@ -372,9 +375,6 @@ class Renderer {
     pos_t sy = y_offset;
     if (paint_scale != 1.0f) {
       sy = (pos_t)((y_offset - SCREEN_H / 2) * paint_scale + (SCREEN_H / 2));
-      if (paint_scale > 1.0f) {
-        sy = (sy / 2) * 2;
-      }
     }
 
     for (pos_t ix = 0; ix < width; ix++) {
@@ -388,16 +388,29 @@ class Renderer {
 
       iter_t iter = work_buff[sy * SCREEN_W + sx];
       if (iter == ITER_BLANK) {
-        line_buff[ix] = 0x0000;
-      } else if (iter == ITER_QUEUED) {
-        line_buff[ix] = 0xFFE0;
-      } else {
-        if (iter >= max_iter) {
-          line_buff[ix] = max_iter_color;
-        } else {
+        iter = work_buff[(sy & 0xFFFE) * SCREEN_W + (sx & 0xFFFE)];
+        if (iter == ITER_BLANK || iter == ITER_QUEUED) {
+          constexpr pos_t MASK = ~(COARSE_POS_STEP - 1);
+          pos_t sx2 = (sx & MASK) + (COARSE_POS_STEP / 2);
+          pos_t sy2 = (sy & MASK) + (COARSE_POS_STEP / 2);
+          iter = work_buff[sy2 * SCREEN_W + sx2];
+          if (iter == ITER_QUEUED) {
+            iter = ITER_BLANK;
+          }
+        }
+      }
+
+      if (ITER_BLANK < iter) {
+        if (iter < max_iter) {
           int i = (iter + palette_phase) & (palette_size - 1);
           line_buff[ix] = palette[i];
+        } else if (iter <= ITER_MAX) {
+          line_buff[ix] = max_iter_color;
+        } else if (iter == ITER_QUEUED) {
+          line_buff[ix] = 0xF800;
         }
+      } else {
+        line_buff[ix] = 0x0000;
       }
     }
     return result_t::SUCCESS;
@@ -462,6 +475,12 @@ class Renderer {
     on_render_start(scene);
 
     queue.clear();
+
+    for (pos_t y = COARSE_POS_STEP / 2; y < SCREEN_H; y += COARSE_POS_STEP) {
+      for (pos_t x = COARSE_POS_STEP / 2; x < SCREEN_W; x += COARSE_POS_STEP) {
+        enqueue(vec_t{x, y});
+      }
+    }
 
     for (pos_t x = 0; x < SCREEN_W; x++) {
       enqueue(vec_t{x, 0});
