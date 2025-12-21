@@ -64,6 +64,8 @@ enum class formula_t {
   POWER_DRILL,
   CROWN,
   SUPER,
+  CUBIC9601,
+  CUBIC9743,
   FEATHER,
   LAST,
 };

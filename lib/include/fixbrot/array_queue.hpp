@@ -10,8 +10,9 @@
 
 namespace fixbrot {
 
-template <typename prm_TData, size_t prm_DEPTH> class ArrayQueue {
-public:
+template <typename prm_TData, size_t prm_DEPTH>
+class ArrayQueue {
+ public:
   using TData = prm_TData;
   using index_t = uint32_t;
   static constexpr index_t DEPTH = prm_DEPTH;
@@ -21,7 +22,7 @@ public:
 
   TData array[DEPTH];
 
-  inline index_t size() const {
+  FIXBROT_INLINE index_t size() const {
     index_t rp = rd_ptr;
     index_t wp = wr_ptr;
     if (wp >= rp) {
@@ -31,15 +32,15 @@ public:
     }
   }
 
-  inline bool empty() const { return rd_ptr == wr_ptr; }
-  inline bool full() const { return size() >= (DEPTH - 1); }
+  FIXBROT_INLINE bool empty() const { return rd_ptr == wr_ptr; }
+  FIXBROT_INLINE bool full() const { return size() >= (DEPTH - 1); }
 
-  void clear() {
+  FIXBROT_INLINE void clear() {
     rd_ptr = 0;
     wr_ptr = 0;
   }
 
-  inline result_t enqueue(const TData &data) {
+  result_t enqueue(const TData &data) {
     index_t rp = rd_ptr;
     index_t wp = wr_ptr;
     index_t wp_next = wp + 1;
@@ -54,7 +55,7 @@ public:
     return result_t::SUCCESS;
   }
 
-  inline bool dequeue(TData *entry) {
+  bool dequeue(TData *entry) {
     index_t rp = rd_ptr;
     index_t wp = wr_ptr;
     if (rp == wp) {
@@ -70,6 +71,6 @@ public:
   }
 };
 
-} // namespace fixbrot
+}  // namespace fixbrot
 
 #endif

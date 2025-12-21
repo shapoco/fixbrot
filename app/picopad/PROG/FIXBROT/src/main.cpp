@@ -391,42 +391,9 @@ static void update_menu() {
     // update menu item values
     switch (item.key) {
       case menu_key_t::FORMULA:
-        switch (renderer.get_formula()) {
-          case fb::formula_t::BURNING_SHIP:
-            strncpy(item.value_text, "Burning Ship", sizeof(item.value_text));
-            break;
-          case fb::formula_t::CELTIC:
-            strncpy(item.value_text, "Celtic", sizeof(item.value_text));
-            break;
-          case fb::formula_t::BUFFALO:
-            strncpy(item.value_text, "Buffalo", sizeof(item.value_text));
-            break;
-          case fb::formula_t::PERP_BURNING_SHIP:
-            strncpy(item.value_text, "Perp. Burning Ship",
-                    sizeof(item.value_text));
-            break;
-          case fb::formula_t::AIRSHIP:
-            strncpy(item.value_text, "Airship", sizeof(item.value_text));
-            break;
-          case fb::formula_t::SHARK_FIN:
-            strncpy(item.value_text, "Shark Fin", sizeof(item.value_text));
-            break;
-          case fb::formula_t::POWER_DRILL:
-            strncpy(item.value_text, "Power Drill", sizeof(item.value_text));
-            break;
-          case fb::formula_t::CROWN:
-            strncpy(item.value_text, "Crown", sizeof(item.value_text));
-            break;
-          case fb::formula_t::SUPER:
-            strncpy(item.value_text, "Super", sizeof(item.value_text));
-            break;
-          case fb::formula_t::FEATHER:
-            strncpy(item.value_text, "Feather", sizeof(item.value_text));
-            break;
-          default:  // fb::formula_t::MANDELBROT:
-            strncpy(item.value_text, "Mandelbrot", sizeof(item.value_text));
-            break;
-        }
+        strncpy(item.value_text,
+                fb::Mandelbrot::get_name(renderer.get_formula()),
+                sizeof(item.value_text));
         break;
 
       case menu_key_t::SCENE_REAL:
@@ -513,7 +480,7 @@ static fb::result_t feed() {
   return fb::result_t::SUCCESS;
 }
 
-void fixbrot::on_render_start(fb::scene_t &scene) {
+void fixbrot::on_render_start(const fb::scene_t &scene) {
   t_start = Time64();
   LedOn(LED1);
   for (int i = 0; i < NUM_WORKERS; i++) {
