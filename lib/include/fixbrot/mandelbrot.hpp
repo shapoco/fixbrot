@@ -33,10 +33,16 @@ class Mandelbrot {
           return crown32(re32, im32, max_iter);
         case formula_t::SUPER:
           return super32(re32, im32, max_iter);
-        case formula_t::CUBIC9601:
-          return cubic9601_32(re32, im32, max_iter);
-        case formula_t::CUBIC9743:
-          return cubic9743_32(re32, im32, max_iter);
+        case formula_t::CUBIC_MANDELBROT:
+          return cubic_mandelbrot_32(re32, im32, max_iter);
+        case formula_t::CUBIC_01344:
+          return cubic_01344_32(re32, im32, max_iter);
+        case formula_t::CUBIC_01417:
+          return cubic_01417_32(re32, im32, max_iter);
+        case formula_t::CUBIC_09601:
+          return cubic_09601_32(re32, im32, max_iter);
+        case formula_t::CUBIC_09743:
+          return cubic_09743_32(re32, im32, max_iter);
         case formula_t::FEATHER:
           return feather32(re32, im32, max_iter);
         default:  // formula_t::MANDELBROT:
@@ -62,13 +68,19 @@ class Mandelbrot {
           return crown64(re64, im64, max_iter);
         case formula_t::SUPER:
           return super64(re64, im64, max_iter);
-        case formula_t::CUBIC9601:
-          return cubic9601_64(re64, im64, max_iter);
-        case formula_t::CUBIC9743:
-          return cubic9743_64(re64, im64, max_iter);
-        case formula_t::FEATHER:
-          return max_iter;  // not implemented yet
-        default:            // formula_t::MANDELBROT:
+        case formula_t::CUBIC_MANDELBROT:
+          return cubic_mandelbrot_64(re64, im64, max_iter);
+        case formula_t::CUBIC_01344:
+          return cubic_01344_64(re64, im64, max_iter);
+        case formula_t::CUBIC_01417:
+          return cubic_01417_64(re64, im64, max_iter);
+        case formula_t::CUBIC_09601:
+          return cubic_09601_64(re64, im64, max_iter);
+        case formula_t::CUBIC_09743:
+          return cubic_09743_64(re64, im64, max_iter);
+        case formula_t::FEATHER:  // not implemented yet
+          return max_iter;
+        default:  // formula_t::MANDELBROT:
           return mandelbrot64(re64, im64, max_iter);
       }
     }
@@ -96,10 +108,16 @@ class Mandelbrot {
         return "Crown";
       case formula_t::SUPER:
         return "Super";
-      case formula_t::CUBIC9601:
-        return "Cubic #9601";
-      case formula_t::CUBIC9743:
-        return "Cubic #9743";
+      case formula_t::CUBIC_MANDELBROT:
+        return "Cubic Mandelbrot";
+      case formula_t::CUBIC_01344:
+        return "Cubic #01344";
+      case formula_t::CUBIC_01417:
+        return "Cubic #01417";
+      case formula_t::CUBIC_09601:
+        return "Cubic #09601";
+      case formula_t::CUBIC_09743:
+        return "Cubic #09743";
       case formula_t::FEATHER:
         return "Feather";
       default:
@@ -440,7 +458,125 @@ class Mandelbrot {
     return iter;
   }
 
-  static iter_t cubic9601_64(fixed64_t a, fixed64_t b, iter_t max_iter) {
+  static iter_t cubic_mandelbrot_64(fixed64_t a, fixed64_t b, iter_t max_iter) {
+    fixed64_t x = 0;
+    fixed64_t y = 0;
+    fixed64_t xx = 0;
+    fixed64_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      fixed64_t xxx = xx * x;
+      fixed64_t xxy = xx * y;
+      fixed64_t xyy = yy * x;
+      fixed64_t yyy = yy * y;
+      y = xxy * 3 - yyy + b;
+      x = xxx - xyy * 3 + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t cubic_mandelbrot_32(fixed32_t a, fixed32_t b, iter_t max_iter) {
+    fixed32_t x = 0;
+    fixed32_t y = 0;
+    fixed32_t xx = 0;
+    fixed32_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      fixed32_t xxx = xx * x;
+      fixed32_t xxy = xx * y;
+      fixed32_t xyy = yy * x;
+      fixed32_t yyy = yy * y;
+      y = xxy * 3 - yyy + b;
+      x = xxx - xyy * 3 + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t cubic_01344_64(fixed64_t a, fixed64_t b, iter_t max_iter) {
+    fixed64_t x = 0;
+    fixed64_t y = 0;
+    fixed64_t xx = 0;
+    fixed64_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      if (x < 0) xx = -xx;
+      fixed64_t xxx = xx * x;
+      fixed64_t xxy = xx * y;
+      fixed64_t xyy = yy * x.abs();
+      fixed64_t yyy = yy * y;
+      y = xxy * 3 - yyy + b;
+      x = xxx - xyy * 3 + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t cubic_01344_32(fixed32_t a, fixed32_t b, iter_t max_iter) {
+    fixed32_t x = 0;
+    fixed32_t y = 0;
+    fixed32_t xx = 0;
+    fixed32_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      if (x < 0) xx = -xx;
+      fixed32_t xxx = xx * x;
+      fixed32_t xxy = xx * y;
+      fixed32_t xyy = yy * x.abs();
+      fixed32_t yyy = yy * y;
+      y = xxy * 3 - yyy + b;
+      x = xxx - xyy * 3 + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t cubic_01417_64(fixed64_t a, fixed64_t b, iter_t max_iter) {
+    fixed64_t x = 0;
+    fixed64_t y = 0;
+    fixed64_t xx = 0;
+    fixed64_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      fixed64_t xy = x.abs() * y;
+      fixed64_t xxx = xx * x;
+      fixed64_t xxy = xy * x;
+      fixed64_t xyy = xy * y.abs();
+      fixed64_t yyy = yy * y;
+      y = xxy * 3 + yyy + b;
+      x = -xxx - xyy * 3 + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t cubic_01417_32(fixed32_t a, fixed32_t b, iter_t max_iter) {
+    fixed32_t x = 0;
+    fixed32_t y = 0;
+    fixed32_t xx = 0;
+    fixed32_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      fixed32_t xy = x.abs() * y;
+      fixed32_t xxx = xx * x;
+      fixed32_t xxy = xy * x;
+      fixed32_t xyy = xy * y.abs();
+      fixed32_t yyy = yy * y;
+      y = xxy * 3 + yyy + b;
+      x = -xxx - xyy * 3 + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t cubic_09601_64(fixed64_t a, fixed64_t b, iter_t max_iter) {
     fixed64_t x = 0;
     fixed64_t y = 0;
     fixed64_t xx = 0;
@@ -459,7 +595,7 @@ class Mandelbrot {
     return iter;
   }
 
-  static iter_t cubic9601_32(fixed32_t a, fixed32_t b, iter_t max_iter) {
+  static iter_t cubic_09601_32(fixed32_t a, fixed32_t b, iter_t max_iter) {
     fixed32_t x = 0;
     fixed32_t y = 0;
     fixed32_t xx = 0;
@@ -478,7 +614,7 @@ class Mandelbrot {
     return iter;
   }
 
-  static iter_t cubic9743_64(fixed64_t a, fixed64_t b, iter_t max_iter) {
+  static iter_t cubic_09743_64(fixed64_t a, fixed64_t b, iter_t max_iter) {
     fixed64_t x = 0;
     fixed64_t y = 0;
     fixed64_t xx = 0;
@@ -496,7 +632,7 @@ class Mandelbrot {
     return iter;
   }
 
-  static iter_t cubic9743_32(fixed32_t a, fixed32_t b, iter_t max_iter) {
+  static iter_t cubic_09743_32(fixed32_t a, fixed32_t b, iter_t max_iter) {
     fixed32_t x = 0;
     fixed32_t y = 0;
     fixed32_t xx = 0;
