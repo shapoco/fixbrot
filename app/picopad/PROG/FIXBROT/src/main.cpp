@@ -61,7 +61,7 @@ menu_item_t menu_items[] = {
     {menu_key_t::SCENE_IMAG, 40, 2, "Imag", ""},
     {menu_key_t::SCENE_ZOOM, 40, 1, "Zoom", ""},
     {menu_key_t::SCENE_ITER, 40, 1, "Iter", ""},
-    {menu_key_t::SCENE_VFLIP, 40, 1, "Flip", ""},
+    {menu_key_t::SCENE_VFLIP, 40, 1, "VFlip", ""},
     {menu_key_t::BLANK, 0, 1, "", ""},
     {menu_key_t::CAPTION, 0, 1, "PALETTE", ""},
     {menu_key_t::PALETTE_TYPE, 50, 1, "Type", ""},
@@ -86,6 +86,11 @@ static uint16_t last_pressed = 0;
 static bool ctrl_pressed = false;
 static bool ctrl_holded = false;
 
+static uint64_t scroll_start_x_ms = 0;
+static uint64_t scroll_start_y_ms = 0;
+static int scroll_dir_x = 0;
+static int scroll_dir_y = 0;
+
 static bool paint_requested = false;
 static bool menu_open = false;
 static menu_key_t menu_cursor = (menu_key_t)0;
@@ -106,8 +111,6 @@ int main() {
   renderer.init(Time64() / 1000);
 
   Core1Exec(core1_main);
-
-  fb::vec_t scroll_delta = {0, 0};
 
   while (True) {
     uint64_t now_ms = Time64() / 1000;
@@ -252,22 +255,40 @@ int main() {
           }
         } else {
           // scroll
+          int new_dir_x = 0;
+          int scroll_x = 0;
           if (key_pressed & (1 << KEY_LEFT)) {
-            scroll_delta.x = fb::clamp(-32, -1, scroll_delta.x - 1);
+            new_dir_x = -1;
           } else if (key_pressed & (1 << KEY_RIGHT)) {
-            scroll_delta.x = fb::clamp(1, 32, scroll_delta.x + 1);
-          } else {
-            scroll_delta.x = 0;
+            new_dir_x = 1;
           }
+          if (new_dir_x != scroll_dir_x) {
+            scroll_dir_x = new_dir_x;
+            scroll_start_x_ms = now_ms;
+          }
+          if (scroll_dir_x != 0) {
+            int elapsed = now_ms - scroll_start_x_ms;
+            scroll_x = scroll_dir_x * fb::clamp(1, 32, elapsed / 128);
+          }
+
+          int new_dir_y = 0;
+          int scroll_y = 0;
           if (key_pressed & (1 << KEY_UP)) {
-            scroll_delta.y = fb::clamp(-32, -1, scroll_delta.y - 1);
+            new_dir_y = -1;
           } else if (key_pressed & (1 << KEY_DOWN)) {
-            scroll_delta.y = fb::clamp(1, 32, scroll_delta.y + 1);
-          } else {
-            scroll_delta.y = 0;
+            new_dir_y = 1;
           }
-          if (scroll_delta.x != 0 || scroll_delta.y != 0) {
-            renderer.scroll(scroll_delta.x, scroll_delta.y);
+          if (new_dir_y != scroll_dir_y) {
+            scroll_dir_y = new_dir_y;
+            scroll_start_y_ms = now_ms;
+          }
+          if (scroll_dir_y != 0) {
+            int elapsed = now_ms - scroll_start_y_ms;
+            scroll_y = scroll_dir_y * fb::clamp(1, 32, elapsed / 128);
+          }
+
+          if (scroll_x != 0 || scroll_y != 0) {
+            renderer.scroll(scroll_x, scroll_y);
           }
         }
 
