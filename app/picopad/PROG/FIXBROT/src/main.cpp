@@ -19,6 +19,7 @@ enum class menu_key_t {
   SCENE_IMAG,
   SCENE_ZOOM,
   SCENE_ITER,
+  SCENE_VFLIP,
   PALETTE_TYPE,
   PALETTE_SLOPE,
   PALETTE_PHASE,
@@ -60,6 +61,7 @@ menu_item_t menu_items[] = {
     {menu_key_t::SCENE_IMAG, 40, 2, "Imag", ""},
     {menu_key_t::SCENE_ZOOM, 40, 1, "Zoom", ""},
     {menu_key_t::SCENE_ITER, 40, 1, "Iter", ""},
+    {menu_key_t::SCENE_VFLIP, 40, 1, "Flip", ""},
     {menu_key_t::BLANK, 0, 1, "", ""},
     {menu_key_t::CAPTION, 0, 1, "PALETTE", ""},
     {menu_key_t::PALETTE_TYPE, 50, 1, "Type", ""},
@@ -190,6 +192,10 @@ int main() {
 
           case menu_key_t::SCENE_ITER:
             renderer.set_max_iter(renderer.get_max_iter() + inc_dec * 100);
+            break;
+
+          case menu_key_t::SCENE_VFLIP:
+            renderer.set_vert_flip(!renderer.get_vert_flip());
             break;
 
           case menu_key_t::PALETTE_TYPE:
@@ -414,6 +420,11 @@ static void update_menu() {
       case menu_key_t::SCENE_ITER:
         snprintf(item.value_text, sizeof(item.value_text), "%d",
                  renderer.get_max_iter());
+        break;
+
+      case menu_key_t::SCENE_VFLIP:
+        snprintf(item.value_text, sizeof(item.value_text), "%s",
+                 renderer.get_vert_flip() ? "On" : "Off");
         break;
 
       case menu_key_t::PALETTE_TYPE:

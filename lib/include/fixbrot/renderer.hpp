@@ -32,6 +32,7 @@ class Renderer {
   scene_t scene;
   int scale_exp = -2;
   int screen_size_clog2 = 0;
+  bool vert_flip = false;
   uint32_t iter_accum = 0;
 
   pos_t verify_x = 0;
@@ -110,6 +111,10 @@ class Renderer {
 
   result_t scroll(pos_t delta_x, pos_t delta_y) {
     if (is_busy()) return result_t::ERROR_BUSY;
+
+    if (vert_flip) {
+      delta_y = -delta_y;
+    }
 
     delta_x = clamp((pos_t)(-SCREEN_W + 2), (pos_t)(SCREEN_W - 2), delta_x);
     delta_y = clamp((pos_t)(-SCREEN_H + 2), (pos_t)(SCREEN_H - 2), delta_y);
@@ -322,6 +327,15 @@ class Renderer {
     return result_t::SUCCESS;
   }
 
+  FIXBROT_INLINE bool get_vert_flip() const { return vert_flip; }
+
+  result_t set_vert_flip(bool vf) {
+    if (is_busy()) return result_t::ERROR_BUSY;
+    vert_flip = vf;
+    paint_requested = true;
+    return result_t::SUCCESS;
+  }
+
   void load_builtin_palette(builtin_palette_t palette, int slope) {
     slope = clamp(0, MAX_PALETTE_SLOPE, slope);
     switch (palette) {
@@ -378,6 +392,10 @@ class Renderer {
 
   result_t paint_line(pos_t x_offset, pos_t y_offset, pos_t width,
                       col_t *line_buff) {
+    if (vert_flip) {
+      y_offset = SCREEN_H - 1 - y_offset;
+    }
+
     pos_t sy = y_offset;
     if (paint_scale != 1.0f) {
       sy = (pos_t)((y_offset - SCREEN_H / 2) * paint_scale + (SCREEN_H / 2));
@@ -415,11 +433,10 @@ class Renderer {
         if (iter < scene.max_iter) {
           c = palette[(iter + palette_phase) & (palette_size - 1)];
         }
-        // if (!finished) {
-        //   uint8_t r, g, b;
-        //   unpack565(c, &r, &g, &b);
-        //   c = pack565(r / 2, g / 2, b / 2);
-        // }
+        if (!finished) {
+          c >>= 1;
+          c &= 0x7BEF;
+        }
         line_buff[ix] = c;
       } else {
         line_buff[ix] = 0xFFE0;

@@ -39,6 +39,10 @@ class Mandelbrot {
           return cubic_01344_32(re32, im32, max_iter);
         case formula_t::CUBIC_01417:
           return cubic_01417_32(re32, im32, max_iter);
+        case formula_t::CUBIC_01479:
+          return cubic_01479_32(re32, im32, max_iter);
+        case formula_t::CUBIC_01856:
+          return cubic_01856_32(re32, im32, max_iter);
         case formula_t::CUBIC_09601:
           return cubic_09601_32(re32, im32, max_iter);
         case formula_t::CUBIC_09743:
@@ -74,6 +78,10 @@ class Mandelbrot {
           return cubic_01344_64(re64, im64, max_iter);
         case formula_t::CUBIC_01417:
           return cubic_01417_64(re64, im64, max_iter);
+        case formula_t::CUBIC_01479:
+          return cubic_01479_64(re64, im64, max_iter);
+        case formula_t::CUBIC_01856:
+          return cubic_01856_64(re64, im64, max_iter);
         case formula_t::CUBIC_09601:
           return cubic_09601_64(re64, im64, max_iter);
         case formula_t::CUBIC_09743:
@@ -114,6 +122,10 @@ class Mandelbrot {
         return "Cubic #01344";
       case formula_t::CUBIC_01417:
         return "Cubic #01417";
+      case formula_t::CUBIC_01479:
+        return "Cubic #01479";
+      case formula_t::CUBIC_01856:
+        return "Cubic #01856";
       case formula_t::CUBIC_09601:
         return "Cubic #09601";
       case formula_t::CUBIC_09743:
@@ -570,6 +582,92 @@ class Mandelbrot {
       fixed32_t yyy = yy * y;
       y = xxy * 3 + yyy + b;
       x = -xxx - xyy * 3 + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t cubic_01479_64(fixed64_t a, fixed64_t b, iter_t max_iter) {
+    fixed64_t x = 0;
+    fixed64_t y = 0;
+    fixed64_t xx = 0;
+    fixed64_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      if (x < 0) xx = -xx;
+      fixed64_t xxx = xx * x;
+      fixed64_t xxy = xx * y;
+      fixed64_t xyy = x.abs() * y.abs() * y;
+      fixed64_t yyy = yy * y;
+      y = xxy * -3 - yyy + b;
+      x = -xxx + xyy * 3 + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t cubic_01479_32(fixed32_t a, fixed32_t b, iter_t max_iter) {
+    fixed32_t x = 0;
+    fixed32_t y = 0;
+    fixed32_t xx = 0;
+    fixed32_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      if (x < 0) xx = -xx;
+      fixed32_t xxx = xx * x;
+      fixed32_t xxy = xx * y;
+      fixed32_t xyy = x.abs() * y.abs() * y;
+      fixed32_t yyy = yy * y;
+      y = xxy * -3 - yyy + b;
+      x = -xxx + xyy * 3 + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t cubic_01856_64(fixed64_t a, fixed64_t b, iter_t max_iter) {
+    fixed64_t x = 0;
+    fixed64_t y = 0;
+    fixed64_t xx = 0;
+    fixed64_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      // temp = ((abs(zr) * zr * zr) - (3 * abs(zr) * zi * zi)) + cr;
+      // zi = ((3 * abs(zr) * zr * abs(zi)) - (zi * zi * zi)) + ci;
+      // zr = temp;
+      if (x < 0) xx = -xx;
+      fixed64_t xxx = xx * x;
+      fixed64_t xxy = xx * y.abs();
+      fixed64_t xyy = yy * x.abs();
+      fixed64_t yyy = yy * y;
+      y = xxy * 3 - yyy + b;
+      x = xxx - xyy * 3 + a;
+      xx = x.square();
+      yy = y.square();
+    }
+    return iter;
+  }
+
+  static iter_t cubic_01856_32(fixed32_t a, fixed32_t b, iter_t max_iter) {
+    fixed32_t x = 0;
+    fixed32_t y = 0;
+    fixed32_t xx = 0;
+    fixed32_t yy = 0;
+    iter_t iter = 0;
+    while (++iter < max_iter && (xx + yy).int_part() < 4) {
+      // temp = ((abs(zr) * zr * zr) - (3 * abs(zr) * zi * zi)) + cr;
+      // zi = ((3 * abs(zr) * zr * abs(zi)) - (zi * zi * zi)) + ci;
+      // zr = temp;
+      if (x < 0) xx = -xx;
+      fixed32_t xxx = xx * x;
+      fixed32_t xxy = xx * y.abs();
+      fixed32_t xyy = yy * x.abs();
+      fixed32_t yyy = yy * y;
+      y = xxy * 3 - yyy + b;
+      x = xxx - xyy * 3 + a;
       xx = x.square();
       yy = y.square();
     }
