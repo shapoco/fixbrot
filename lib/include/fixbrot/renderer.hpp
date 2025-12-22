@@ -35,8 +35,8 @@ class Renderer {
   bool vert_flip = false;
   uint32_t iter_accum = 0;
 
-  pos_t verify_x = 0;
-  pos_t verify_y = SCREEN_H;
+  pos_t correct_x = 0;
+  pos_t correct_y = SCREEN_H;
 
   col_t palette[MAX_PALETTE_SIZE] = {0};
   col_t max_iter_color = 0x0000;
@@ -76,7 +76,7 @@ class Renderer {
     palette_load_heatmap(DEFAULT_PALETTE_SLOPE);
 
     FIXBROT_TRY(clear_rect(rect_t{0, 0, SCREEN_W, SCREEN_H}));
-    FIXBROT_TRY(start_render());
+    FIXBROT_TRY(start_render(true));
     paint_requested = true;
 
     return result_t::SUCCESS;
@@ -173,7 +173,7 @@ class Renderer {
     }
 
     // render new area
-    FIXBROT_TRY(start_render());
+    FIXBROT_TRY(start_render(false));
     if (delta_x != 0) {
       pos_t x0 = (delta_x > 0) ? (dest.right() - 1) : dest.x;
       pos_t x1 = (delta_x > 0) ? dest.right() : (dest.x - 1);
@@ -215,7 +215,7 @@ class Renderer {
         }
       }
     }
-    FIXBROT_TRY(start_render());
+    FIXBROT_TRY(start_render(true));
 
     paint_zoom_inprog = true;
     paint_zoom_dir_in = true;
@@ -239,7 +239,7 @@ class Renderer {
     if (prec_changed) {
       // clear all
       FIXBROT_TRY(clear_rect(rect_t{0, 0, SCREEN_W, SCREEN_H}));
-      FIXBROT_TRY(start_render());
+      FIXBROT_TRY(start_render(true));
     } else {
       // downscale last image and reuse pixels
       for (pos_t i = 0; i < SCREEN_H; i++) {
@@ -255,7 +255,7 @@ class Renderer {
           }
         }
       }
-      FIXBROT_TRY(start_render());
+      FIXBROT_TRY(start_render(true));
       rect_t rect{SCREEN_W / 4, SCREEN_H / 4, SCREEN_W / 2, SCREEN_H / 2};
       FIXBROT_TRY(scan_vert(rect.x, rect.x - 1, rect.y, rect.h));
       FIXBROT_TRY(scan_vert(rect.right() - 1, rect.right(), rect.y, rect.h));
@@ -277,7 +277,7 @@ class Renderer {
     if (is_busy()) return result_t::ERROR_BUSY;
     scene.formula = f;
     FIXBROT_TRY(clear_rect(rect_t{0, 0, SCREEN_W, SCREEN_H}));
-    FIXBROT_TRY(start_render());
+    FIXBROT_TRY(start_render(true));
     paint_requested = true;
     return result_t::SUCCESS;
   }
@@ -298,7 +298,7 @@ class Renderer {
     bool increasing = (max_iter > scene.max_iter);
     scene.max_iter = max_iter;
     if (increasing) {
-      FIXBROT_TRY(start_render());
+      FIXBROT_TRY(start_render(true));
       for (pos_t y = 1; y < SCREEN_H - 1; y++) {
         for (pos_t x = 1; x < SCREEN_W - 1; x++) {
           if (work_buff[y * SCREEN_W + x] == ITER_MAX) {
@@ -369,7 +369,7 @@ class Renderer {
   bool dequeue(vec_t *out_loc) { return queue.dequeue(out_loc); }
 
   FIXBROT_INLINE bool is_busy() const {
-    return busy_items > 0 || verify_y < SCREEN_H;
+    return (busy_items > 0) || (correct_y < SCREEN_H);
   }
 
   FIXBROT_INLINE bool is_repaint_requested() const { return paint_requested; }
@@ -497,7 +497,7 @@ class Renderer {
     return s;
   }
 
-  result_t start_render() {
+  result_t start_render(bool post_correction) {
     if (is_busy()) {
       return result_t::ERROR_BUSY;
     }
@@ -507,8 +507,8 @@ class Renderer {
 
     queue.clear();
     busy_items = 0;
-    verify_x = 0;
-    verify_y = 0;
+    correct_x = 0;
+    correct_y = post_correction ? 0 : SCREEN_H;
     iter_accum = 0;
 
     for (pos_t y = COARSE_POS_STEP / 2; y < SCREEN_H; y += COARSE_POS_STEP) {
@@ -577,7 +577,7 @@ class Renderer {
     }
 
     if (busy_items == 0) {
-      verify();
+      correct();
     }
 
     if (!is_busy()) {
@@ -605,37 +605,38 @@ class Renderer {
     return result_t::SUCCESS;
   }
 
-  void verify() {
+  void correct() {
     scene_t s = get_worker_args();
 
-    while (verify_y < SCREEN_H) {
+    while (correct_y < SCREEN_H) {
       pos_t x0 = -1;
       iter_t iter0 = ITER_BLANK;
       int blank_count = 0;
-      while (verify_x < SCREEN_W) {
-        iter_t iter1 = work_buff[verify_y * SCREEN_W + verify_x];
+      int line_ptr = correct_y * SCREEN_W;
+      while (correct_x < SCREEN_W) {
+        iter_t iter1 = work_buff[line_ptr + correct_x];
         if (iter1 == ITER_BLANK || ITER_MAX < iter1) {
           // count blank pixel
           blank_count++;
-          verify_x++;
+          correct_x++;
           continue;
         }
 
-        if (iter0 == iter1 || blank_count == 0) {
+        if (blank_count == 0 || iter0 == iter1) {
           // not broken
           blank_count = 0;
-          x0 = verify_x;
+          x0 = correct_x;
           iter0 = iter1;
-          verify_x++;
+          correct_x++;
           continue;
         }
 
         // find boundary between x0 and x1
-        pos_t x1 = verify_x;
+        pos_t x1 = correct_x;
         while (x0 + 1 < x1) {
           pos_t xm = (x1 + x0) / 2;
-          iter_t iter_m = Mandelbrot::compute(s, vec_t{xm, verify_y});
-          work_buff[verify_y * SCREEN_W + xm] = iter_m;
+          iter_t iter_m = Mandelbrot::compute(s, vec_t{xm, correct_y});
+          work_buff[line_ptr + xm] = iter_m;
           if (iter_m == iter0) {
             x0 = xm;
           } else {
@@ -645,23 +646,25 @@ class Renderer {
         }
 
         // restart border-tracing
-        if (verify_y > 0) {
-          enqueue(vec_t{x0, (pos_t)(verify_y - 1)});
-          enqueue(vec_t{x1, (pos_t)(verify_y - 1)});
+        if (correct_y > 0) {
+          enqueue(vec_t{x0, (pos_t)(correct_y - 1)});
+          enqueue(vec_t{x1, (pos_t)(correct_y - 1)});
         }
-        if (verify_y < SCREEN_H - 1) {
-          enqueue(vec_t{x0, (pos_t)(verify_y + 1)});
-          enqueue(vec_t{x1, (pos_t)(verify_y + 1)});
+        if (correct_y < SCREEN_H - 1) {
+          enqueue(vec_t{x0, (pos_t)(correct_y + 1)});
+          enqueue(vec_t{x1, (pos_t)(correct_y + 1)});
         }
 
+        // continue correction from x1
         x0 = x1;
         iter0 = iter1;
-        verify_x = x1;
+        blank_count = 0;
+        correct_x = x1;
         return;
       }
 
-      verify_y++;
-      verify_x = 0;
+      correct_y++;
+      correct_x = 0;
     }
   }
 

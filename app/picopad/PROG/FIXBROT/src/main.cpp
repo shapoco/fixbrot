@@ -94,7 +94,8 @@ static int menu_pos = 0;
 static uint64_t t_start = 0;
 static uint64_t t_elapsed = 0;
 
-static volatile bool busy = false;
+static uint64_t last_busy_time_ms = 0;
+static bool busy = false;
 
 static void core1_main();
 static void paint();
@@ -123,8 +124,6 @@ int main() {
     uint16_t key_down = key_pressed & (~last_pressed);
     uint16_t key_up = (~key_pressed) & last_pressed;
     last_pressed = key_pressed;
-
-    busy = !!key_pressed || renderer.is_busy();
 
     constexpr uint16_t EXCEPT_X = (1 << KEY_LEFT) | (1 << KEY_RIGHT) |
                                   (1 << KEY_UP) | (1 << KEY_DOWN) |
@@ -291,6 +290,13 @@ int main() {
 
     paint();
 
+    if (renderer.is_busy() || !!key_pressed || paint_requested) {
+      last_busy_time_ms = now_ms;
+      busy = true;
+    } else {
+      busy = now_ms - last_busy_time_ms < 1000;
+    }
+
     if (!busy) {
       WaitMs(20);
     }
@@ -310,8 +316,6 @@ static void core1_main() {
 }
 
 static void paint() {
-  char buf[32];
-
   if (!renderer.is_repaint_requested() && !paint_requested) {
     return;
   }
