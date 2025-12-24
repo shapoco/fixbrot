@@ -108,6 +108,12 @@ static void update_menu();
 static fb::result_t feed();
 
 int main() {
+#if USE_PICOPAD10 || USE_PICOPAD20
+  vreg_set_voltage(VREG_VOLTAGE_1_20);
+  WaitMs(100);
+  set_sys_clock_khz(250000, true);
+#endif
+
   renderer.init(Time64() / 1000);
 
   Core1Exec(core1_main);
@@ -268,7 +274,7 @@ int main() {
           }
           if (scroll_dir_x != 0) {
             int elapsed = now_ms - scroll_start_x_ms;
-            scroll_x = scroll_dir_x * fb::clamp(1, 32, elapsed / 128);
+            scroll_x = scroll_dir_x * fb::clamp(1, 32, 1 + elapsed / 128);
           }
 
           int new_dir_y = 0;
@@ -284,7 +290,7 @@ int main() {
           }
           if (scroll_dir_y != 0) {
             int elapsed = now_ms - scroll_start_y_ms;
-            scroll_y = scroll_dir_y * fb::clamp(1, 32, elapsed / 128);
+            scroll_y = scroll_dir_y * fb::clamp(1, 32, 1 + elapsed / 128);
           }
 
           if (scroll_x != 0 || scroll_y != 0) {
