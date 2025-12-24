@@ -10,17 +10,21 @@
 
 namespace fixbrot {
 
-template <typename prm_TData, size_t prm_DEPTH>
+template <typename prm_TData>
 class ArrayQueue {
  public:
   using TData = prm_TData;
   using index_t = uint32_t;
-  static constexpr index_t DEPTH = prm_DEPTH;
+  const index_t depth;
 
   volatile index_t wr_ptr = 0;
   volatile index_t rd_ptr = 0;
 
-  TData array[DEPTH];
+  TData *array;
+
+  ArrayQueue(index_t depth) : depth(depth) { array = new TData[depth]; }
+
+  ~ArrayQueue() { delete[] array; }
 
   FIXBROT_INLINE index_t size() const {
     index_t rp = rd_ptr;
@@ -28,12 +32,12 @@ class ArrayQueue {
     if (wp >= rp) {
       return wp - rp;
     } else {
-      return (DEPTH - rp) + wp;
+      return (depth - rp) + wp;
     }
   }
 
   FIXBROT_INLINE bool empty() const { return rd_ptr == wr_ptr; }
-  FIXBROT_INLINE bool full() const { return size() >= (DEPTH - 1); }
+  FIXBROT_INLINE bool full() const { return size() >= (depth - 1); }
 
   FIXBROT_INLINE void clear() {
     rd_ptr = 0;
@@ -44,7 +48,7 @@ class ArrayQueue {
     index_t rp = rd_ptr;
     index_t wp = wr_ptr;
     index_t wp_next = wp + 1;
-    if (wp_next >= DEPTH) {
+    if (wp_next >= depth) {
       wp_next = 0;
     }
     if (wp_next == rp) {
@@ -63,7 +67,7 @@ class ArrayQueue {
     }
     *entry = array[rp];
     rp++;
-    if (rp >= DEPTH) {
+    if (rp >= depth) {
       rp = 0;
     }
     rd_ptr = rp;

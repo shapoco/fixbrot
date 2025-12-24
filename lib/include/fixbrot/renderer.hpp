@@ -15,19 +15,18 @@ void on_render_start(const scene_t &scene);
 void on_render_finished(result_t res);
 bool on_collect(cell_t *resp);
 
-template <pos_t prm_WIDTH, pos_t prm_HEIGHT>
 class Renderer {
  public:
-  static constexpr pos_t SCREEN_W = prm_WIDTH;
-  static constexpr pos_t SCREEN_H = prm_HEIGHT;
-  static constexpr int ZOOM_DURATION_MS = 300;
+  const pos_t width;
+  const pos_t height;
+  static constexpr int ZOOM_DURATION_MS = 200;
 
  private:
   uint64_t last_ms = 0;
 
   int busy_items = 0;
-  ArrayQueue<vec_t, (SCREEN_W + SCREEN_H) * 16> queue;
-  iter_t work_buff[SCREEN_W * SCREEN_H];
+  ArrayQueue<vec_t> queue;
+  iter_t *work_buff;
 
   scene_t scene;
   int scale_exp = -2;
@@ -36,7 +35,7 @@ class Renderer {
   uint32_t iter_accum = 0;
 
   pos_t correct_x = 0;
-  pos_t correct_y = SCREEN_H;
+  pos_t correct_y = height;
 
   col_t palette[MAX_PALETTE_SIZE] = {0};
   col_t max_iter_color = 0x0000;
@@ -48,10 +47,22 @@ class Renderer {
   bool paint_zoom_inprog = false;
   bool paint_zoom_dir_in = false;
   uint64_t paint_zoom_end_ms = 0;
-  pos_t paint_x_buff[SCREEN_W];
+  pos_t *paint_x_buff;
   float paint_scale = 1.0f;
 
  public:
+  Renderer(pos_t width, pos_t height)
+      : width(width),
+        height(height),
+        queue((width + height) * 16),
+        work_buff(new iter_t[width * height]),
+        paint_x_buff(new pos_t[width]) {}
+
+  ~Renderer() {
+    delete[] work_buff;
+    delete[] paint_x_buff;
+  }
+
   real_t get_center_re() const { return scene.real; }
   real_t get_center_im() const { return scene.imag; }
   int get_scale_exp() const { return scale_exp; }
@@ -66,7 +77,7 @@ class Renderer {
 
     scale_exp = -2;
     screen_size_clog2 = 0;
-    pos_t p = SCREEN_W > SCREEN_H ? SCREEN_W : SCREEN_H;
+    pos_t p = width > height ? width : height;
     while (p > 0) {
       screen_size_clog2++;
       p /= 2;
@@ -75,7 +86,7 @@ class Renderer {
 
     palette_load_heatmap(DEFAULT_PALETTE_SLOPE);
 
-    FIXBROT_TRY(clear_rect(rect_t{0, 0, SCREEN_W, SCREEN_H}));
+    FIXBROT_TRY(clear_rect(rect_t{0, 0, width, height}));
     FIXBROT_TRY(start_render(true));
     paint_requested = true;
 
@@ -116,8 +127,8 @@ class Renderer {
       delta_y = -delta_y;
     }
 
-    delta_x = clamp((pos_t)(-SCREEN_W + 2), (pos_t)(SCREEN_W - 2), delta_x);
-    delta_y = clamp((pos_t)(-SCREEN_H + 2), (pos_t)(SCREEN_H - 2), delta_y);
+    delta_x = clamp((pos_t)(-width + 2), (pos_t)(width - 2), delta_x);
+    delta_y = clamp((pos_t)(-height + 2), (pos_t)(height - 2), delta_y);
 
     if (scene.real < -2 && delta_x < 0) delta_x = 0;
     if (scene.real > 2 && delta_x > 0) delta_x = 0;
@@ -132,8 +143,8 @@ class Renderer {
     rect_t dest;
     dest.x = (delta_x >= 0) ? 0 : -delta_x;
     dest.y = (delta_y >= 0) ? 0 : -delta_y;
-    dest.h = SCREEN_H - ((delta_y >= 0) ? delta_y : -delta_y);
-    dest.w = SCREEN_W - ((delta_x >= 0) ? delta_x : -delta_x);
+    dest.h = height - ((delta_y >= 0) ? delta_y : -delta_y);
+    dest.w = width - ((delta_x >= 0) ? delta_x : -delta_x);
 
     // scroll image data
     iter_t *src_line = work_buff;
@@ -144,27 +155,27 @@ class Renderer {
       dst_line -= delta_x;
     }
     if (delta_y >= 0) {
-      src_line += delta_y * SCREEN_W;
+      src_line += delta_y * width;
       for (pos_t i = 0; i < dest.h; i++) {
         memmove(dst_line, src_line, sizeof(iter_t) * dest.w);
-        src_line += SCREEN_W;
-        dst_line += SCREEN_W;
+        src_line += width;
+        dst_line += width;
       }
     } else {
-      src_line += (dest.h - 1) * SCREEN_W;
-      dst_line += (dest.h - 1 - delta_y) * SCREEN_W;
+      src_line += (dest.h - 1) * width;
+      dst_line += (dest.h - 1 - delta_y) * width;
       for (pos_t i = 0; i < dest.h; i++) {
         memmove(dst_line, src_line, sizeof(iter_t) * dest.w);
-        src_line -= SCREEN_W;
-        dst_line -= SCREEN_W;
+        src_line -= width;
+        dst_line -= width;
       }
     }
 
     // clear new area
     if (delta_x > 0) {
-      FIXBROT_TRY(clear_rect(rect_t{dest.right(), 0, delta_x, SCREEN_H}));
+      FIXBROT_TRY(clear_rect(rect_t{dest.right(), 0, delta_x, height}));
     } else if (delta_x < 0) {
-      FIXBROT_TRY(clear_rect(rect_t{0, 0, (pos_t)-delta_x, SCREEN_H}));
+      FIXBROT_TRY(clear_rect(rect_t{0, 0, (pos_t)-delta_x, height}));
     }
     if (delta_y > 0) {
       FIXBROT_TRY(clear_rect(rect_t{dest.x, dest.bottom(), dest.w, delta_y}));
@@ -198,19 +209,19 @@ class Renderer {
 
     if (prec_changed) {
       // clear all
-      FIXBROT_TRY(clear_rect(rect_t{0, 0, SCREEN_W, SCREEN_H}));
+      FIXBROT_TRY(clear_rect(rect_t{0, 0, width, height}));
     } else {
       // upscale last image and reuse pixels
-      for (pos_t i = 0; i < SCREEN_H; i++) {
-        pos_t dy = (i < SCREEN_H / 2) ? i : (SCREEN_H * 3 / 2 - 1 - i);
-        pos_t sy = SCREEN_H / 4 + (dy / 2);
-        for (pos_t j = 0; j < SCREEN_W; j++) {
-          pos_t dx = (j < SCREEN_W / 2) ? j : (SCREEN_W * 3 / 2 - 1 - j);
-          pos_t sx = SCREEN_W / 4 + (dx / 2);
+      for (pos_t i = 0; i < height; i++) {
+        pos_t dy = (i < height / 2) ? i : (height * 3 / 2 - 1 - i);
+        pos_t sy = height / 4 + (dy / 2);
+        for (pos_t j = 0; j < width; j++) {
+          pos_t dx = (j < width / 2) ? j : (width * 3 / 2 - 1 - j);
+          pos_t sx = width / 4 + (dx / 2);
           if ((dx & 1) == 0 && (dy & 1) == 0) {
-            work_buff[dy * SCREEN_W + dx] = work_buff[sy * SCREEN_W + sx];
+            work_buff[dy * width + dx] = work_buff[sy * width + sx];
           } else {
-            work_buff[dy * SCREEN_W + dx] = ITER_BLANK;
+            work_buff[dy * width + dx] = ITER_BLANK;
           }
         }
       }
@@ -238,25 +249,26 @@ class Renderer {
 
     if (prec_changed) {
       // clear all
-      FIXBROT_TRY(clear_rect(rect_t{0, 0, SCREEN_W, SCREEN_H}));
+      FIXBROT_TRY(clear_rect(rect_t{0, 0, width, height}));
       FIXBROT_TRY(start_render(true));
     } else {
       // downscale last image and reuse pixels
-      for (pos_t i = 0; i < SCREEN_H; i++) {
-        pos_t dy = (i < SCREEN_H / 2) ? (SCREEN_H / 2 - 1 - i) : i;
-        pos_t sy = dy * 2 - SCREEN_H / 2;
-        for (pos_t j = 0; j < SCREEN_W; j++) {
-          pos_t dx = (j < SCREEN_W / 2) ? (SCREEN_W / 2 - 1 - j) : j;
-          pos_t sx = dx * 2 - SCREEN_W / 2;
-          if (0 <= sx && sx < SCREEN_W && 0 <= sy && sy < SCREEN_H) {
-            work_buff[dy * SCREEN_W + dx] = work_buff[sy * SCREEN_W + sx];
+      for (pos_t i = 0; i < height; i++) {
+        pos_t dy = (i < height / 2) ? (height / 2 - 1 - i) : i;
+        pos_t sy = dy * 2 - height / 2;
+        for (pos_t j = 0; j < width; j++) {
+          pos_t dx = (j < width / 2) ? (width / 2 - 1 - j) : j;
+          pos_t sx = dx * 2 - width / 2;
+          if (0 <= sx && sx < width && 0 <= sy && sy < height) {
+            work_buff[dy * width + dx] = work_buff[sy * width + sx];
           } else {
-            work_buff[dy * SCREEN_W + dx] = ITER_BLANK;
+            work_buff[dy * width + dx] = ITER_BLANK;
           }
         }
       }
       FIXBROT_TRY(start_render(true));
-      rect_t rect{SCREEN_W / 4, SCREEN_H / 4, SCREEN_W / 2, SCREEN_H / 2};
+      rect_t rect{(pos_t)(width / 4), (pos_t)(height / 4), (pos_t)(width / 2),
+                  (pos_t)(height / 2)};
       FIXBROT_TRY(scan_vert(rect.x, rect.x - 1, rect.y, rect.h));
       FIXBROT_TRY(scan_vert(rect.right() - 1, rect.right(), rect.y, rect.h));
       FIXBROT_TRY(scan_hori(rect.x, rect.y, rect.y - 1, rect.w));
@@ -276,7 +288,7 @@ class Renderer {
   result_t set_formula(formula_t f) {
     if (is_busy()) return result_t::ERROR_BUSY;
     scene.formula = f;
-    FIXBROT_TRY(clear_rect(rect_t{0, 0, SCREEN_W, SCREEN_H}));
+    FIXBROT_TRY(clear_rect(rect_t{0, 0, width, height}));
     FIXBROT_TRY(start_render(true));
     paint_requested = true;
     return result_t::SUCCESS;
@@ -299,27 +311,27 @@ class Renderer {
     scene.max_iter = max_iter;
     if (increasing) {
       FIXBROT_TRY(start_render(true));
-      for (pos_t y = 1; y < SCREEN_H - 1; y++) {
-        for (pos_t x = 1; x < SCREEN_W - 1; x++) {
-          if (work_buff[y * SCREEN_W + x] == ITER_MAX) {
-            work_buff[y * SCREEN_W + x] = ITER_BLANK;
+      for (pos_t y = 1; y < height - 1; y++) {
+        for (pos_t x = 1; x < width - 1; x++) {
+          if (work_buff[y * width + x] == ITER_MAX) {
+            work_buff[y * width + x] = ITER_BLANK;
           }
         }
       }
-      for (pos_t y0 = 8; y0 < SCREEN_H - 1; y0 += 16) {
+      for (pos_t y0 = 8; y0 < height - 1; y0 += 16) {
         pos_t y1 = y0 + 1;
-        if (y0 < SCREEN_H / 2) {
-          FIXBROT_TRY(scan_hori(0, y0, y1, SCREEN_W));
+        if (y0 < height / 2) {
+          FIXBROT_TRY(scan_hori(0, y0, y1, width));
         } else {
-          FIXBROT_TRY(scan_hori(0, y1, y0, SCREEN_W));
+          FIXBROT_TRY(scan_hori(0, y1, y0, width));
         }
       }
-      for (pos_t x0 = 8; x0 < SCREEN_W - 1; x0 += 16) {
+      for (pos_t x0 = 8; x0 < width - 1; x0 += 16) {
         pos_t x1 = x0 + 1;
-        if (x0 < SCREEN_W / 2) {
-          FIXBROT_TRY(scan_vert(x0, x1, 0, SCREEN_H));
+        if (x0 < width / 2) {
+          FIXBROT_TRY(scan_vert(x0, x1, 0, height));
         } else {
-          FIXBROT_TRY(scan_vert(x1, x0, 0, SCREEN_H));
+          FIXBROT_TRY(scan_vert(x1, x0, 0, height));
         }
       }
     }
@@ -369,7 +381,7 @@ class Renderer {
   bool dequeue(vec_t *out_loc) { return queue.dequeue(out_loc); }
 
   FIXBROT_INLINE bool is_busy() const {
-    return (busy_items > 0) || (correct_y < SCREEN_H);
+    return (busy_items > 0) || (correct_y < height);
   }
 
   FIXBROT_INLINE bool is_repaint_requested() const { return paint_requested; }
@@ -380,46 +392,46 @@ class Renderer {
 
   result_t paint_start() {
     // cache x coordinates
-    for (pos_t x = 0; x < SCREEN_W; x++) {
+    for (pos_t x = 0; x < width; x++) {
       pos_t sx = x;
       if (paint_scale != 1.0f) {
-        sx = (pos_t)((x - SCREEN_W / 2) * paint_scale + (SCREEN_W / 2));
+        sx = (pos_t)((x - width / 2) * paint_scale + (width / 2));
       }
       paint_x_buff[x] = sx;
     }
     return result_t::SUCCESS;
   }
 
-  result_t paint_line(pos_t x_offset, pos_t y_offset, pos_t width,
+  result_t paint_line(pos_t x_offset, pos_t y_offset, pos_t w,
                       col_t *line_buff) {
     if (vert_flip) {
-      y_offset = SCREEN_H - 1 - y_offset;
+      y_offset = height - 1 - y_offset;
     }
 
     pos_t sy = y_offset;
     if (paint_scale != 1.0f) {
-      sy = (pos_t)((y_offset - SCREEN_H / 2) * paint_scale + (SCREEN_H / 2));
+      sy = (pos_t)((y_offset - height / 2) * paint_scale + (height / 2));
     }
 
-    for (pos_t ix = 0; ix < width; ix++) {
+    for (pos_t ix = 0; ix < w; ix++) {
       pos_t x = x_offset + ix;
       pos_t sx = paint_x_buff[x];
 
-      if (sx < 0 || sx >= SCREEN_W || sy < 0 || sy >= SCREEN_H) {
+      if (sx < 0 || sx >= width || sy < 0 || sy >= height) {
         line_buff[ix] = 0x0000;
         continue;
       }
 
       bool finished = true;
-      iter_t iter = work_buff[sy * SCREEN_W + sx];
+      iter_t iter = work_buff[sy * width + sx];
       if (iter == ITER_BLANK) {
         finished = false;
-        iter = work_buff[(sy & 0xFFFE) * SCREEN_W + (sx & 0xFFFE)];
+        iter = work_buff[(sy & 0xFFFE) * width + (sx & 0xFFFE)];
         if (iter == ITER_BLANK || iter == ITER_QUEUED) {
           constexpr pos_t MASK = ~(COARSE_POS_STEP - 1);
           pos_t sx2 = (sx & MASK) + (COARSE_POS_STEP / 2);
           pos_t sy2 = (sy & MASK) + (COARSE_POS_STEP / 2);
-          iter = work_buff[sy2 * SCREEN_W + sx2];
+          iter = work_buff[sy2 * width + sx2];
           if (iter == ITER_QUEUED) {
             iter = ITER_BLANK;
           }
@@ -482,18 +494,18 @@ class Renderer {
   }
 
   result_t clear_rect(rect_t view) {
-    iter_t *line_ptr = work_buff + (view.y * SCREEN_W + view.x);
+    iter_t *line_ptr = work_buff + (view.y * width + view.x);
     for (pos_t i = 0; i < view.h; i++) {
       memset(line_ptr, 0, sizeof(iter_t) * view.w);
-      line_ptr += SCREEN_W;
+      line_ptr += width;
     }
     return result_t::SUCCESS;
   }
 
   scene_t get_worker_args() {
     scene_t s = scene;
-    s.real -= scene.step * (SCREEN_W / 2);
-    s.imag -= scene.step * (SCREEN_H / 2);
+    s.real -= scene.step * (width / 2);
+    s.imag -= scene.step * (height / 2);
     return s;
   }
 
@@ -508,22 +520,22 @@ class Renderer {
     queue.clear();
     busy_items = 0;
     correct_x = 0;
-    correct_y = post_correction ? 0 : SCREEN_H;
+    correct_y = post_correction ? 0 : height;
     iter_accum = 0;
 
-    for (pos_t y = COARSE_POS_STEP / 2; y < SCREEN_H; y += COARSE_POS_STEP) {
-      for (pos_t x = COARSE_POS_STEP / 2; x < SCREEN_W; x += COARSE_POS_STEP) {
+    for (pos_t y = COARSE_POS_STEP / 2; y < height; y += COARSE_POS_STEP) {
+      for (pos_t x = COARSE_POS_STEP / 2; x < width; x += COARSE_POS_STEP) {
         enqueue(vec_t{x, y});
       }
     }
 
-    for (pos_t x = 0; x < SCREEN_W; x++) {
+    for (pos_t x = 0; x < width; x++) {
       enqueue(vec_t{x, 0});
-      enqueue(vec_t{x, (pos_t)(SCREEN_H - 1)});
+      enqueue(vec_t{x, (pos_t)(height - 1)});
     }
-    for (pos_t y = 1; y < SCREEN_H - 1; y++) {
+    for (pos_t y = 1; y < height - 1; y++) {
       enqueue(vec_t{0, y});
-      enqueue(vec_t{(pos_t)(SCREEN_W - 1), y});
+      enqueue(vec_t{(pos_t)(width - 1), y});
     }
 
     return result_t::SUCCESS;
@@ -545,7 +557,7 @@ class Renderer {
       }
       pos_t x = c.loc.x;
       pos_t y = c.loc.y;
-      work_buff[y * SCREEN_W + x] = c.iter;
+      work_buff[y * width + x] = c.iter;
       cell_t l = get_cell(x - 1, y);
       cell_t r = get_cell(x + 1, y);
       cell_t u = get_cell(x, y - 1);
@@ -564,7 +576,7 @@ class Renderer {
       FIXBROT_TRY(compare(c, r, d, rd));
     }
 
-    uint32_t iter_thresh = (uint32_t)SCREEN_W * SCREEN_H * 4;
+    uint32_t iter_thresh = (uint32_t)width * height * 4;
     if (is_animating()) {
       iter_thresh /= 8;
     }
@@ -583,10 +595,10 @@ class Renderer {
     if (!is_busy()) {
       // fill blanks
       iter_t *line_ptr = work_buff;
-      for (pos_t y = 0; y < SCREEN_H; y++) {
+      for (pos_t y = 0; y < height; y++) {
         iter_t *ptr = line_ptr;
         iter_t last = 1;
-        for (pos_t x = 0; x < SCREEN_W; x++) {
+        for (pos_t x = 0; x < width; x++) {
           iter_t iter = *ptr;
           if (iter == ITER_BLANK) {
             *ptr = last;
@@ -595,7 +607,7 @@ class Renderer {
           }
           ptr++;
         }
-        line_ptr += SCREEN_W;
+        line_ptr += width;
       }
 
       on_render_finished(result_t::SUCCESS);
@@ -608,12 +620,12 @@ class Renderer {
   void correct() {
     scene_t s = get_worker_args();
 
-    while (correct_y < SCREEN_H) {
+    while (correct_y < height) {
       pos_t x0 = -1;
       iter_t iter0 = ITER_BLANK;
       int blank_count = 0;
-      int line_ptr = correct_y * SCREEN_W;
-      while (correct_x < SCREEN_W) {
+      int line_ptr = correct_y * width;
+      while (correct_x < width) {
         iter_t iter1 = work_buff[line_ptr + correct_x];
         if (iter1 == ITER_BLANK || ITER_MAX < iter1) {
           // count blank pixel
@@ -650,7 +662,7 @@ class Renderer {
           enqueue(vec_t{x0, (pos_t)(correct_y - 1)});
           enqueue(vec_t{x1, (pos_t)(correct_y - 1)});
         }
-        if (correct_y < SCREEN_H - 1) {
+        if (correct_y < height - 1) {
           enqueue(vec_t{x0, (pos_t)(correct_y + 1)});
           enqueue(vec_t{x1, (pos_t)(correct_y + 1)});
         }
@@ -671,9 +683,9 @@ class Renderer {
   FIXBROT_INLINE cell_t get_cell(pos_t x, pos_t y) {
     vec_t loc{x, y};
     cell_t cell;
-    if (0 <= x && x < SCREEN_W && 0 <= y && y < SCREEN_H) {
+    if (0 <= x && x < width && 0 <= y && y < height) {
       cell.loc = loc;
-      cell.iter = work_buff[y * SCREEN_W + x];
+      cell.iter = work_buff[y * width + x];
     } else {
       cell.loc = loc;
       cell.iter = ITER_WALL;
@@ -709,7 +721,7 @@ class Renderer {
   }
 
   result_t enqueue(vec_t loc) {
-    iter_t &target = work_buff[loc.y * SCREEN_W + loc.x];
+    iter_t &target = work_buff[loc.y * width + loc.x];
     if (target != ITER_BLANK) {
       return result_t::SUCCESS;
     }
