@@ -1,7 +1,7 @@
 #include "../include.h"
 
 #include "fixbrot/fixbrot.hpp"
-#include "fixbrot/gbui.hpp"
+#include "fixbrot/gui.hpp"
 
 namespace fb = fixbrot;
 
@@ -18,7 +18,7 @@ static void paint();
 static fb::result_t feed();
 
 fb::Worker workers[NUM_WORKERS];
-fb::GBUI gbui(WIDTH, HEIGHT);
+fb::GUI gbui(WIDTH, HEIGHT);
 
 int main() {
 #if USE_PICOPAD10 || USE_PICOPAD20

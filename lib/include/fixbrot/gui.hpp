@@ -105,7 +105,7 @@ const int NUM_MENU_ITEMS = sizeof(menu_items) / sizeof(menu_items[0]);
 
 static constexpr int MENU_WIDTH = 160;
 
-class GBUI {
+class GUI {
  public:
   const int width;
   const int height;
@@ -135,7 +135,7 @@ class GBUI {
   static constexpr int SHADOW_SIZE = 16;
   int shadow_alpha[SHADOW_SIZE];
 
-  GBUI(pos_t width, pos_t height)
+  GUI(pos_t width, pos_t height)
       : width(width),
         height(height),
         renderer(width, height),
