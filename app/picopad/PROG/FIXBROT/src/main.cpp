@@ -1,7 +1,6 @@
 #include "../include.h"
 
 #include "fixbrot/fixbrot.hpp"
-#include "fixbrot/gui.hpp"
 
 namespace fb = fixbrot;
 
@@ -11,14 +10,14 @@ static int feed_index = 0;
 static uint16_t line_buff[WIDTH];
 
 static uint64_t last_busy_time_ms = 0;
-static bool busy = false;
+static volatile bool busy = false;
 
 static void core1_main();
 static void paint();
 static fb::result_t feed();
 
 fb::Worker workers[NUM_WORKERS];
-fb::GUI gbui(WIDTH, HEIGHT);
+fb::GUI gui(WIDTH, HEIGHT);
 
 int main() {
 #if USE_PICOPAD10 || USE_PICOPAD20
@@ -27,7 +26,7 @@ int main() {
   set_sys_clock_khz(250000, true);
 #endif
 
-  gbui.init(Time64() / 1000);
+  gui.init();
 
   Core1Exec(core1_main);
 
@@ -48,13 +47,14 @@ int main() {
       ResetToBootLoader();
     }
 
-    gbui.service(now_ms, key_pressed);
+    gui.button_update(key_pressed);
+    gui.service();
     feed();
     workers[0].service();
 
     paint();
 
-    if (gbui.is_busy() || key_pressed != fb::button_t::NONE) {
+    if (gui.is_busy() || key_pressed != fb::button_t::NONE) {
       last_busy_time_ms = now_ms;
       busy = true;
     } else {
@@ -69,40 +69,40 @@ int main() {
 
 static void core1_main() {
   while (true) {
+    workers[1].service();
     if (!busy) {
       WaitMs(20);
     }
-    workers[1].service();
   }
 }
 
 static void paint() {
-  if (!gbui.is_paint_requested()) {
+  if (!gui.is_paint_requested()) {
     return;
   }
 
-  gbui.paint_start();
+  gui.paint_start();
   DispStartImg(0, WIDTH, 0, HEIGHT);
   for (fb::pos_t y = 0; y < HEIGHT; y++) {
-    gbui.paint_line(y, line_buff);
+    gui.paint_line(y, line_buff);
     for (fb::pos_t x = 0; x < WIDTH; x++) {
       DispSendImg2(line_buff[x]);
     }
   }
   DispStopImg();
-  gbui.paint_end();
+  gui.paint_end();
 }
 
 static fb::result_t feed() {
   bool stall = false;
-  int n = gbui.renderer.num_queued();
+  int n = gui.renderer.num_queued();
   while (n-- > 0 && !stall) {
     stall = true;
     for (int i = 0; i < NUM_WORKERS; i++) {
       fb::Worker &w = workers[feed_index];
       feed_index = (feed_index + 1) % NUM_WORKERS;
       fb::vec_t loc;
-      if (!w.full() && gbui.renderer.dequeue(&loc)) {
+      if (!w.full() && gui.renderer.dequeue(&loc)) {
         FIXBROT_TRY(w.dispatch(loc));
         stall = false;
         break;
@@ -112,16 +112,18 @@ static fb::result_t feed() {
   return fb::result_t::SUCCESS;
 }
 
-void fixbrot::on_render_start(const fb::scene_t &scene) {
+uint64_t fb::get_time_ms() { return Time64() / 1000; }
+
+void fb::on_render_start(const fb::scene_t &scene) {
   LedOn(LED1);
   for (int i = 0; i < NUM_WORKERS; i++) {
     workers[i].init(scene);
   }
 }
 
-void fixbrot::on_render_finished(fb::result_t res) { LedOff(LED1); }
+void fb::on_render_finished(fb::result_t res) { LedOff(LED1); }
 
-bool fixbrot::on_collect(fb::cell_t *resp) {
+bool fb::on_collect(fb::cell_t *resp) {
   if (workers[0].num_processed() > workers[1].num_processed()) {
     return workers[0].collect(resp);
   } else {

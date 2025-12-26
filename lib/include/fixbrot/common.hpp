@@ -14,6 +14,7 @@ enum class result_t : uint16_t {
   SUCCESS,
   ERROR_QUEUE_OVERFLOW,
   ERROR_BUSY,
+  ERROR_TOO_MANY_TOUCHES,
 };
 
 #define FIXBROT_TRY(expr)                    \

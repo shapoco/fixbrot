@@ -4,16 +4,19 @@
 #ifndef FIXBROT_NO_STDLIB
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #endif
 
 #include "fixbrot/array_queue.hpp"
 #include "fixbrot/common.hpp"
+#include "fixbrot/mandelbrot.hpp"
 
 namespace fixbrot {
 
 void on_render_start(const scene_t &scene);
 void on_render_finished(result_t res);
 bool on_collect(cell_t *resp);
+uint64_t get_time_ms();
 
 class Renderer {
  public:
@@ -67,9 +70,7 @@ class Renderer {
   real_t get_center_im() const { return scene.imag; }
   int get_scale_exp() const { return scale_exp; }
 
-  result_t init(uint64_t now_ms) {
-    last_ms = now_ms;
-
+  result_t init() {
     scene.formula = formula_t::MANDELBROT;
     scene.real = -0.5f;
     scene.imag = 0;
@@ -93,8 +94,8 @@ class Renderer {
     return result_t::SUCCESS;
   }
 
-  result_t service(uint64_t now_ms) {
-    uint64_t delta_ms = now_ms - last_ms;
+  result_t service() {
+    uint64_t now_ms = get_time_ms();
     last_ms = now_ms;
 
     if (is_busy()) {
@@ -199,7 +200,7 @@ class Renderer {
     return result_t::SUCCESS;
   }
 
-  result_t zoom_in(uint64_t now_ms) {
+  result_t zoom_in() {
     if (is_busy()) return result_t::ERROR_BUSY;
 
     scale_exp++;
@@ -230,13 +231,13 @@ class Renderer {
 
     paint_zoom_inprog = true;
     paint_zoom_dir_in = true;
-    paint_zoom_end_ms = now_ms + ZOOM_DURATION_MS;
+    paint_zoom_end_ms = get_time_ms() + ZOOM_DURATION_MS;
     paint_requested = true;
 
     return result_t::SUCCESS;
   }
 
-  result_t zoom_out(uint64_t now_ms) {
+  result_t zoom_out() {
     if (is_busy()) return result_t::ERROR_BUSY;
     if (scale_exp <= MIN_SCALE_EXP) {
       return result_t::SUCCESS;
@@ -276,7 +277,7 @@ class Renderer {
     }
 
     paint_zoom_inprog = true;
-    paint_zoom_end_ms = now_ms + ZOOM_DURATION_MS;
+    paint_zoom_end_ms = get_time_ms() + ZOOM_DURATION_MS;
     paint_zoom_dir_in = false;
     paint_requested = true;
 
