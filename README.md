@@ -1,6 +1,6 @@
 # FixBrot
 
-Mandelbrot Viewer for [M5CoreS3](https://docs.m5stack.com/en/core/CoreS3)/[PicoPad](https://github.com/pajenicko/picopad) with Border Tracing Algorithm.
+Mandelbrot Viewer for [M5Stack CoreS3](https://docs.m5stack.com/en/core/CoreS3)/[PicoPad](https://github.com/pajenicko/picopad) with Border Tracing Algorithm.
 
 https://github.com/user-attachments/assets/04b31c8e-c4cc-4e2c-9aa6-9185a7eabbc5
 
