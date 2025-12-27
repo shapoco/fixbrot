@@ -1,6 +1,10 @@
 #ifndef FIXBROT_COMMON_HPP
 #define FIXBROT_COMMON_HPP
 
+#ifndef FIXBROT_ITER_12BIT
+#define FIXBROT_ITER_12BIT (0)
+#endif
+
 #ifndef FIXBROT_NO_STDLIB
 #include <stdint.h>
 #endif
@@ -76,10 +80,16 @@ enum class formula_t {
   LAST,
 };
 
+#if FIXBROT_ITER_12BIT
+static constexpr int ITER_BITS = 12;
+#else
+static constexpr int ITER_BITS = 16;
+#endif
+
 static constexpr iter_t ITER_BLANK = 0;
-static constexpr iter_t ITER_MAX = (1 << (sizeof(iter_t) * 8)) - 3;
-static constexpr iter_t ITER_QUEUED = (1 << (sizeof(iter_t) * 8)) - 2;
-static constexpr iter_t ITER_WALL = (1 << (sizeof(iter_t) * 8)) - 1;
+static constexpr iter_t ITER_MAX = (1 << ITER_BITS) - 3;
+static constexpr iter_t ITER_QUEUED = (1 << ITER_BITS) - 2;
+static constexpr iter_t ITER_WALL = (1 << ITER_BITS) - 1;
 
 static constexpr int COARSE_POS_BITS = 4;
 static constexpr pos_t COARSE_POS_STEP = 1 << COARSE_POS_BITS;

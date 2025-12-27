@@ -1,10 +1,24 @@
 # FixBrot
 
-Mandelbrot Viewer for [M5Stack CoreS3](https://docs.m5stack.com/en/core/CoreS3)/[PicoPad](https://github.com/pajenicko/picopad) with Border Tracing Algorithm.
+Mandelbrot Viewer for [PicoPad](https://github.com/pajenicko/picopad)/[PicoSystem](https://shop.pimoroni.com/products/picosystem)/[M5Stack CoreS3](https://docs.m5stack.com/en/core/CoreS3) with Border Tracing Algorithm.
 
 https://github.com/user-attachments/assets/04b31c8e-c4cc-4e2c-9aa6-9185a7eabbc5
 
 ## Hou to Use
+
+### PicoSystem/PicoPad
+
+|PicoPad|PicoSystem|Funcion|
+|:--|:--|:--|
+|←→↑↓|←→↑↓|Scroll|
+|A|B|Zoom in|
+|B|A|Zoom out|
+|Hold X + ↑|Hold Y + ↑|Increse iteration count|
+|Hold X + ↓|Hold Y + ↓|Decrese iteration count|
+|Hold X + ←|Hold Y + ←|Change palette|
+|Hold X + →|Hold Y + →|Shift palette|
+|X|Y|Open/Close menu|
+|Y|-|Quit|
 
 ### M5Stack CoreS3
 
@@ -17,31 +31,7 @@ https://github.com/user-attachments/assets/04b31c8e-c4cc-4e2c-9aa6-9185a7eabbc5
 |Tap menu item|Select option|
 |Bottom left/right button|Change option value|
 
-### PicoPad
-
-|Key|Funcion|
-|:--|:--|
-|←→↑↓|Scroll|
-|A|Zoom in|
-|B|Zoom out|
-|Hold X + ↑|Increse iteration count|
-|Hold X + ↓|Decrese iteration count|
-|Hold X + ←|Change palette|
-|Hold X + →|Shift palette|
-|X|Open/Close menu|
-|Y|Quit|
-
 ## How to Build
-
-### M5Stack CoreS3 (Arduino IDE)
-
-1. Install [Arduino IDE and Board/Library for M5Stack](https://docs.m5stack.com/en/arduino/arduino_ide).
-    - Fixbrot requires `M5Unified` library.
-2. Checkout or download this repository.
-3. Open the Arduino sketch in `app/m5/Fixbrot/` with Arduino IDE.
-4. Connect your M5Stack CoreS3 to the PC, and specify board.
-5. Open `Tools` in menu bar, and click `PSRAM: ...` --&gt; `Disabled` (to improve performance).
-6. Upload the sketch to the CoreS3.
 
 ### PicoPad (Linux/WSL2)
 
@@ -54,3 +44,25 @@ make DEVICE=picopad20 all
 ```
 
 binary generated in `fixbrot/app/picopad/bin/`.
+
+### PicoSystem (Linux/WSL2)
+
+1. Setup [Pico SDK](https://github.com/raspberrypi/pico-sdk) and [PicoSystem SDK](https://github.com/pimoroni/picosystem).
+2. Set `PICO_SDK_PATH` and `PICOSYSTEM_DIR` environment variable.
+3. Checkout or download this repository and run `make` in `app/picosystem`
+
+    ```sh
+    git clone https://github.com/shapoco/fixbrot.git
+    cd fixbrot/app/picosystem
+    make
+    ```
+
+### M5Stack CoreS3 (Arduino IDE)
+
+1. Install [Arduino IDE and Board/Library for M5Stack](https://docs.m5stack.com/en/arduino/arduino_ide).
+    - Fixbrot requires `M5Unified` library.
+2. Checkout or download this repository.
+3. Open the Arduino sketch in `app/m5/Fixbrot/` with Arduino IDE.
+4. Connect your M5Stack CoreS3 to the PC, and specify board.
+5. Open `Tools` in menu bar, and click `PSRAM: ...` --&gt; `Disabled` (to improve performance).
+6. Upload the sketch to the CoreS3.

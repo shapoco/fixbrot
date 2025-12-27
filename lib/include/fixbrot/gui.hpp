@@ -578,6 +578,14 @@ class GUI {
         line_buff[menu_pos + i] = pack565(r, g, b);
       }
     }
+
+#if FIXBROT_BYTE_SWAP
+    for (int x = 0; x < width; x++) {
+      uint16_t c = line_buff[x];
+      line_buff[x] = ((c >> 8) & 0x00FF) | ((c << 8) & 0xFF00);
+    }
+#endif
+
     return result_t::SUCCESS;
   }
 

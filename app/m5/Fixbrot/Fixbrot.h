@@ -19,6 +19,10 @@
 #ifndef FIXBROT_COMMON_HPP
 #define FIXBROT_COMMON_HPP
 
+#ifndef FIXBROT_ITER_12BIT
+#define FIXBROT_ITER_12BIT (0)
+#endif
+
 #ifndef FIXBROT_NO_STDLIB
 #include <stdint.h>
 #endif
@@ -429,10 +433,16 @@ enum class formula_t {
   LAST,
 };
 
+#if FIXBROT_ITER_12BIT
+static constexpr int ITER_BITS = 12;
+#else
+static constexpr int ITER_BITS = 16;
+#endif
+
 static constexpr iter_t ITER_BLANK = 0;
-static constexpr iter_t ITER_MAX = (1 << (sizeof(iter_t) * 8)) - 3;
-static constexpr iter_t ITER_QUEUED = (1 << (sizeof(iter_t) * 8)) - 2;
-static constexpr iter_t ITER_WALL = (1 << (sizeof(iter_t) * 8)) - 1;
+static constexpr iter_t ITER_MAX = (1 << ITER_BITS) - 3;
+static constexpr iter_t ITER_QUEUED = (1 << ITER_BITS) - 2;
+static constexpr iter_t ITER_WALL = (1 << ITER_BITS) - 1;
 
 static constexpr int COARSE_POS_BITS = 4;
 static constexpr pos_t COARSE_POS_STEP = 1 << COARSE_POS_BITS;
@@ -1620,7 +1630,12 @@ class Renderer {
 
   int busy_items = 0;
   ArrayQueue<vec_t> queue;
+#if FIXBROT_ITER_12BIT
+  const pos_t stride;
+  uint8_t *work_buff;
+#else
   iter_t *work_buff;
+#endif
 
   scene_t scene;
   int scale_exp = -2;
@@ -1649,8 +1664,14 @@ class Renderer {
       : width(width),
         height(height),
         queue((width + height) * 16),
+#if FIXBROT_ITER_12BIT
+        stride(width * 3 / 2),
+        work_buff(new uint8_t[stride * height]),
+#else
         work_buff(new iter_t[width * height]),
-        paint_x_buff(new pos_t[width]) {}
+#endif
+        paint_x_buff(new pos_t[width]) {
+  }
 
   ~Renderer() {
     delete[] work_buff;
@@ -1738,7 +1759,30 @@ class Renderer {
     dest.h = height - ((delta_y >= 0) ? delta_y : -delta_y);
     dest.w = width - ((delta_x >= 0) ? delta_x : -delta_x);
 
-    // scroll image data
+    rect_t src;
+    src.x = dest.x + delta_x;
+    src.y = dest.y + delta_y;
+    src.w = dest.w;
+    src.h = dest.h;
+
+// scroll image data
+#if FIXBROT_ITER_12BIT
+    if (delta_y * stride + delta_x >= 0) {
+      for (pos_t dy = dest.y, sy = src.y; dy < dest.bottom(); dy++, sy++) {
+        for (pos_t dx = dest.x, sx = src.x; dx < dest.right(); dx++, sx++) {
+          work_buff_write(dx, dy, work_buff_read(sx, sy));
+        }
+      }
+    } else {
+      for (pos_t dy = dest.bottom() - 1, sy = src.bottom() - 1; dy >= dest.y;
+           dy--, sy--) {
+        for (pos_t dx = dest.right() - 1, sx = src.right() - 1; dx >= dest.x;
+             dx--, sx--) {
+          work_buff_write(dx, dy, work_buff_read(sx, sy));
+        }
+      }
+    }
+#else
     iter_t *src_line = work_buff;
     iter_t *dst_line = work_buff;
     if (delta_x >= 0) {
@@ -1762,6 +1806,7 @@ class Renderer {
         dst_line -= width;
       }
     }
+#endif
 
     // clear new area
     if (delta_x > 0) {
@@ -1811,9 +1856,9 @@ class Renderer {
           pos_t dx = (j < width / 2) ? j : (width * 3 / 2 - 1 - j);
           pos_t sx = width / 4 + (dx / 2);
           if ((dx & 1) == 0 && (dy & 1) == 0) {
-            work_buff[dy * width + dx] = work_buff[sy * width + sx];
+            work_buff_write(dx, dy, work_buff_read(sx, sy));
           } else {
-            work_buff[dy * width + dx] = ITER_BLANK;
+            work_buff_write(dx, dy, ITER_BLANK);
           }
         }
       }
@@ -1852,9 +1897,9 @@ class Renderer {
           pos_t dx = (j < width / 2) ? (width / 2 - 1 - j) : j;
           pos_t sx = dx * 2 - width / 2;
           if (0 <= sx && sx < width && 0 <= sy && sy < height) {
-            work_buff[dy * width + dx] = work_buff[sy * width + sx];
+            work_buff_write(dx, dy, work_buff_read(sx, sy));
           } else {
-            work_buff[dy * width + dx] = ITER_BLANK;
+            work_buff_write(dx, dy, ITER_BLANK);
           }
         }
       }
@@ -1905,8 +1950,8 @@ class Renderer {
       FIXBROT_TRY(start_render(true));
       for (pos_t y = 1; y < height - 1; y++) {
         for (pos_t x = 1; x < width - 1; x++) {
-          if (work_buff[y * width + x] == ITER_MAX) {
-            work_buff[y * width + x] = ITER_BLANK;
+          if (work_buff_read(x, y) == ITER_MAX) {
+            work_buff_write(x, y, ITER_BLANK);
           }
         }
       }
@@ -2015,25 +2060,26 @@ class Renderer {
       }
 
       bool finished = true;
-      iter_t iter = work_buff[sy * width + sx];
+      iter_t iter = work_buff_read(sx, sy);
       if (iter == ITER_BLANK) {
         finished = false;
-        iter = work_buff[(sy & 0xFFFE) * width + (sx & 0xFFFE)];
+        iter = work_buff_read(sx & 0xFFFE, sy & 0xFFFE);
         if (iter == ITER_BLANK || iter == ITER_QUEUED) {
           constexpr pos_t MASK = ~(COARSE_POS_STEP - 1);
           pos_t sx2 = (sx & MASK) + (COARSE_POS_STEP / 2);
           pos_t sy2 = (sy & MASK) + (COARSE_POS_STEP / 2);
-          iter = work_buff[sy2 * width + sx2];
+          iter = work_buff_read(sx2, sy2);
           if (iter == ITER_QUEUED) {
             iter = ITER_BLANK;
           }
         }
       }
 
+      col_t c;
       if (ITER_BLANK == iter) {
-        line_buff[ix] = 0x0000;
+        c = 0x0000;
       } else if (iter <= ITER_MAX) {
-        col_t c = max_iter_color;
+        c = max_iter_color;
         if (iter < scene.max_iter) {
           c = palette[(iter + palette_phase) & (palette_size - 1)];
         }
@@ -2041,11 +2087,12 @@ class Renderer {
           c >>= 1;
           c &= 0x7BEF;
         }
-        line_buff[ix] = c;
       } else {
-        line_buff[ix] = 0xFFE0;
+        c = 0xFFE0;
       }
+      line_buff[ix] = c;
     }
+
     return result_t::SUCCESS;
   }
 
@@ -2055,6 +2102,40 @@ class Renderer {
   }
 
  private:
+  FIXBROT_INLINE iter_t work_buff_read(pos_t x, pos_t y) {
+    if (x < 0 || x >= width || y < 0 || y >= height) {
+      return 0;
+    }
+#if FIXBROT_ITER_12BIT
+    int i = y * stride + x * 3 / 2;
+    if (x % 2 == 0) {
+      return work_buff[i] | ((work_buff[i + 1] & 0x0F) << 8);
+    } else {
+      return ((work_buff[i] & 0xF0) >> 4) | (work_buff[i + 1] << 4);
+    }
+#else
+    return work_buff[y * width + x];
+#endif
+  }
+
+  FIXBROT_INLINE void work_buff_write(pos_t x, pos_t y, iter_t val) {
+    if (x < 0 || x >= width || y < 0 || y >= height) {
+      return;
+    }
+#if FIXBROT_ITER_12BIT
+    int i = y * stride + x * 3 / 2;
+    if (x % 2 == 0) {
+      work_buff[i] = val & 0xFF;
+      work_buff[i + 1] = (work_buff[i + 1] & 0xF0) | ((val >> 8) & 0x0F);
+    } else {
+      work_buff[i] = (work_buff[i] & 0x0F) | ((val << 4) & 0xF0);
+      work_buff[i + 1] = (val >> 4) & 0xFF;
+    }
+#else
+    work_buff[y * width + x] = val;
+#endif
+  }
+
   void update_pixel_step() {
     scene.step = real_exp2(-scale_exp - screen_size_clog2);
   }
@@ -2086,11 +2167,52 @@ class Renderer {
   }
 
   result_t clear_rect(rect_t view) {
+#if FIXBROT_ITER_12BIT
+    for (pos_t y = 0; y < view.h; y++) {
+      for (pos_t x = 0; x < view.w; x++) {
+        work_buff_write(view.x + x, view.y + y, 0);
+      }
+    }
+#else
     iter_t *line_ptr = work_buff + (view.y * width + view.x);
     for (pos_t i = 0; i < view.h; i++) {
       memset(line_ptr, 0, sizeof(iter_t) * view.w);
       line_ptr += width;
     }
+#endif
+    return result_t::SUCCESS;
+  }
+
+  result_t fill_blank() {
+#if FIXBROT_ITER_12BIT
+    for (pos_t y = 0; y < height; y++) {
+      iter_t last = 1;
+      for (pos_t x = 0; x < width; x++) {
+        iter_t iter = work_buff_read(x, y);
+        if (iter == ITER_BLANK) {
+          work_buff_write(x, y, last);
+        } else {
+          last = iter;
+        }
+      }
+    }
+#else
+    iter_t *line_ptr = work_buff;
+    for (pos_t y = 0; y < height; y++) {
+      iter_t *ptr = line_ptr;
+      iter_t last = 1;
+      for (pos_t x = 0; x < width; x++) {
+        iter_t iter = *ptr;
+        if (iter == ITER_BLANK) {
+          *ptr = last;
+        } else {
+          last = iter;
+        }
+        ptr++;
+      }
+      line_ptr += width;
+    }
+#endif
     return result_t::SUCCESS;
   }
 
@@ -2149,7 +2271,7 @@ class Renderer {
       }
       pos_t x = c.loc.x;
       pos_t y = c.loc.y;
-      work_buff[y * width + x] = c.iter;
+      work_buff_write(x, y, c.iter);
       cell_t l = get_cell(x - 1, y);
       cell_t r = get_cell(x + 1, y);
       cell_t u = get_cell(x, y - 1);
@@ -2186,22 +2308,7 @@ class Renderer {
 
     if (!is_busy()) {
       // fill blanks
-      iter_t *line_ptr = work_buff;
-      for (pos_t y = 0; y < height; y++) {
-        iter_t *ptr = line_ptr;
-        iter_t last = 1;
-        for (pos_t x = 0; x < width; x++) {
-          iter_t iter = *ptr;
-          if (iter == ITER_BLANK) {
-            *ptr = last;
-          } else {
-            last = iter;
-          }
-          ptr++;
-        }
-        line_ptr += width;
-      }
-
+      fill_blank();
       on_render_finished(result_t::SUCCESS);
       paint_requested = true;
     }
@@ -2218,7 +2325,11 @@ class Renderer {
       int blank_count = 0;
       int line_ptr = correct_y * width;
       while (correct_x < width) {
+#if FIXBROT_ITER_12BIT
+        iter_t iter1 = work_buff_read(correct_x, correct_y);
+#else
         iter_t iter1 = work_buff[line_ptr + correct_x];
+#endif
         if (iter1 == ITER_BLANK || ITER_MAX < iter1) {
           // count blank pixel
           blank_count++;
@@ -2240,7 +2351,11 @@ class Renderer {
         while (x0 + 1 < x1) {
           pos_t xm = (x1 + x0) / 2;
           iter_t iter_m = Mandelbrot::compute(s, vec_t{xm, correct_y});
+#if FIXBROT_ITER_12BIT
+          work_buff_write(xm, correct_y, iter_m);
+#else
           work_buff[line_ptr + xm] = iter_m;
+#endif
           if (iter_m == iter0) {
             x0 = xm;
           } else {
@@ -2277,7 +2392,7 @@ class Renderer {
     cell_t cell;
     if (0 <= x && x < width && 0 <= y && y < height) {
       cell.loc = loc;
-      cell.iter = work_buff[y * width + x];
+      cell.iter = work_buff_read(x, y);
     } else {
       cell.loc = loc;
       cell.iter = ITER_WALL;
@@ -2313,11 +2428,20 @@ class Renderer {
   }
 
   result_t enqueue(vec_t loc) {
-    iter_t &target = work_buff[loc.y * width + loc.x];
-    if (target != ITER_BLANK) {
+#if FIXBROT_ITER_12BIT
+    iter_t iter = work_buff_read(loc.x, loc.y);
+#else
+    int i = loc.y * width + loc.x;
+    iter_t iter = work_buff[i];
+#endif
+    if (iter != ITER_BLANK) {
       return result_t::SUCCESS;
     }
-    target = ITER_QUEUED;
+#if FIXBROT_ITER_12BIT
+    work_buff_write(loc.x, loc.y, ITER_QUEUED);
+#else
+    work_buff[i] = ITER_QUEUED;
+#endif
     FIXBROT_TRY(queue.enqueue(loc));
     busy_items++;
     return result_t::SUCCESS;
@@ -3036,6 +3160,8 @@ class GUI {
         }
       }
     }
+
+    return result_t::SUCCESS;
   }
 
   result_t touch_update_raw(int num_touches, const raw_touch_t *new_touches) {
@@ -3279,6 +3405,14 @@ class GUI {
         line_buff[menu_pos + i] = pack565(r, g, b);
       }
     }
+
+#if FIXBROT_BYTE_SWAP
+    for (int x = 0; x < width; x++) {
+      uint16_t c = line_buff[x];
+      line_buff[x] = ((c >> 8) & 0x00FF) | ((c << 8) & 0xFF00);
+    }
+#endif
+
     return result_t::SUCCESS;
   }
 
