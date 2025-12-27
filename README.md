@@ -8,7 +8,7 @@ A 64-bit fixed-point precision Mandelbrot set viewer for [PicoPad](https://githu
 
 See [Releases](https://github.com/shapoco/fixbrot/releases).
 
-## Hou to Use
+## How to Use
 
 ### PicoPad/PicoSystem
 
