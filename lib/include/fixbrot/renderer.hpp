@@ -32,6 +32,7 @@ class Renderer {
 #if FIXBROT_ITER_12BIT
   const pos_t stride;
   uint8_t *work_buff;
+  uint8_t *copy_buff;
 #else
   iter_t *work_buff;
 #endif
@@ -66,6 +67,7 @@ class Renderer {
 #if FIXBROT_ITER_12BIT
         stride(width * 3 / 2),
         work_buff(new uint8_t[stride * height]),
+        copy_buff(new uint8_t[stride]),
 #else
         work_buff(new iter_t[width * height]),
 #endif
@@ -152,33 +154,75 @@ class Renderer {
     scene.real += scene.step * delta_x;
     scene.imag += scene.step * delta_y;
 
-    rect_t dest;
-    dest.x = (delta_x >= 0) ? 0 : -delta_x;
-    dest.y = (delta_y >= 0) ? 0 : -delta_y;
-    dest.h = height - ((delta_y >= 0) ? delta_y : -delta_y);
-    dest.w = width - ((delta_x >= 0) ? delta_x : -delta_x);
+    pos_t dh = height - ((delta_y >= 0) ? delta_y : -delta_y);
+    pos_t dw = width - ((delta_x >= 0) ? delta_x : -delta_x);
 
-    rect_t src;
-    src.x = dest.x + delta_x;
-    src.y = dest.y + delta_y;
-    src.w = dest.w;
-    src.h = dest.h;
+    pos_t dx0 = (delta_x >= 0) ? 0 : -delta_x;
+    pos_t dy0 = (delta_y >= 0) ? 0 : -delta_y;
+    pos_t dx1 = dx0 + dw;
+    pos_t dy1 = dy0 + dh;
+
+    pos_t sx0 = dx0 + delta_x;
+    pos_t sy0 = dy0 + delta_y;
+    pos_t sx1 = sx0 + dw;
+    pos_t sy1 = sy0 + dh;
 
 // scroll image data
 #if FIXBROT_ITER_12BIT
-    if (delta_y * stride + delta_x >= 0) {
-      for (pos_t dy = dest.y, sy = src.y; dy < dest.bottom(); dy++, sy++) {
-        for (pos_t dx = dest.x, sx = src.x; dx < dest.right(); dx++, sx++) {
-          work_buff_write(dx, dy, work_buff_read(sx, sy));
+    {
+      int isx0 = (sx0 * 3) / 2;
+      int isx1 = (sx1 * 3 + 1) / 2;
+      int idx0 = (dx0 * 3) / 2;
+      int idx1 = (dx1 * 3 + 1) / 2;
+      int nb = isx1 - isx0;
+      for (pos_t iy = 0; iy < dh; iy++) {
+        pos_t sy, dy;
+        if (delta_y * stride + delta_x >= 0) {
+          sy = sy0 + iy;
+          dy = dy0 + iy;
+        } else {
+          sy = sy0 + (dh - 1 - iy);
+          dy = dy0 + (dh - 1 - iy);
         }
-      }
-    } else {
-      for (pos_t dy = dest.bottom() - 1, sy = src.bottom() - 1; dy >= dest.y;
-           dy--, sy--) {
-        for (pos_t dx = dest.right() - 1, sx = src.right() - 1; dx >= dest.x;
-             dx--, sx--) {
-          work_buff_write(dx, dy, work_buff_read(sx, sy));
+
+        uint8_t *cp_src_ptr = work_buff + sy * stride + isx0;
+        if ((sx0 & 1) && !(dx0 & 1)) {
+          uint8_t b = cp_src_ptr[0];
+          for (int i = 0; i < nb - 1; i++) {
+            uint8_t b_next = cp_src_ptr[i + 1];
+            copy_buff[i] = ((b_next << 4) & 0xF0) | ((b >> 4) & 0x0F);
+            b = b_next;
+          }
+          cp_src_ptr = copy_buff;
+        } else if (!(sx0 & 1) && (dx0 & 1)) {
+          uint8_t b = cp_src_ptr[nb - 1];
+          for (int i = nb - 1; i >= 1; i--) {
+            uint8_t b_next = cp_src_ptr[i - 1];
+            copy_buff[i] = ((b << 4) & 0xF0) | ((b_next >> 4) & 0x0F);
+            b = b_next;
+          }
+          cp_src_ptr = copy_buff;
+        } else if (sy == dy) {
+          memcpy(copy_buff, cp_src_ptr, nb);
+          cp_src_ptr = copy_buff;
         }
+
+        int cp_isrc = 0;
+        int cp_idst = dy * stride + idx0;
+        int cp_len = nb;
+        if (dx0 & 1) {
+          int i = dy * stride + idx0;
+          work_buff[i] = (work_buff[i] & 0xF0) | (cp_src_ptr[0] & 0x0F);
+          cp_isrc += 1;
+          cp_idst += 1;
+          cp_len -= 1;
+        }
+        if (dx1 & 1) {
+          int i = dy * stride + idx1 - 1;
+          work_buff[i] = (work_buff[i] & 0x0F) | (cp_src_ptr[nb - 1] & 0xF0);
+          cp_len -= 1;
+        }
+        memcpy(work_buff + cp_idst, cp_src_ptr + cp_isrc, cp_len);
       }
     }
 #else
@@ -191,16 +235,16 @@ class Renderer {
     }
     if (delta_y >= 0) {
       src_line += delta_y * width;
-      for (pos_t i = 0; i < dest.h; i++) {
-        memmove(dst_line, src_line, sizeof(iter_t) * dest.w);
+      for (pos_t i = 0; i < dh; i++) {
+        memmove(dst_line, src_line, sizeof(iter_t) * dw);
         src_line += width;
         dst_line += width;
       }
     } else {
-      src_line += (dest.h - 1) * width;
-      dst_line += (dest.h - 1 - delta_y) * width;
-      for (pos_t i = 0; i < dest.h; i++) {
-        memmove(dst_line, src_line, sizeof(iter_t) * dest.w);
+      src_line += (dh - 1) * width;
+      dst_line += (dh - 1 - delta_y) * width;
+      for (pos_t i = 0; i < dh; i++) {
+        memmove(dst_line, src_line, sizeof(iter_t) * dw);
         src_line -= width;
         dst_line -= width;
       }
@@ -209,27 +253,27 @@ class Renderer {
 
     // clear new area
     if (delta_x > 0) {
-      FIXBROT_TRY(clear_rect(rect_t{dest.right(), 0, delta_x, height}));
+      FIXBROT_TRY(clear_rect(rect_t{dx1, 0, delta_x, height}));
     } else if (delta_x < 0) {
       FIXBROT_TRY(clear_rect(rect_t{0, 0, (pos_t)-delta_x, height}));
     }
     if (delta_y > 0) {
-      FIXBROT_TRY(clear_rect(rect_t{dest.x, dest.bottom(), dest.w, delta_y}));
+      FIXBROT_TRY(clear_rect(rect_t{dx0, dy1, dw, delta_y}));
     } else if (delta_y < 0) {
-      FIXBROT_TRY(clear_rect(rect_t{dest.x, 0, dest.w, (pos_t)-delta_y}));
+      FIXBROT_TRY(clear_rect(rect_t{dx0, 0, dw, (pos_t)-delta_y}));
     }
 
     // render new area
     FIXBROT_TRY(start_render(false));
     if (delta_x != 0) {
-      pos_t x0 = (delta_x > 0) ? (dest.right() - 1) : dest.x;
-      pos_t x1 = (delta_x > 0) ? dest.right() : (dest.x - 1);
-      FIXBROT_TRY(scan_vert(x0, x1, dest.y, dest.h));
+      pos_t x0 = (delta_x > 0) ? (dx1 - 1) : dx0;
+      pos_t x1 = (delta_x > 0) ? dx1 : (dx0 - 1);
+      FIXBROT_TRY(scan_vert(x0, x1, dy0, dh));
     }
     if (delta_y != 0) {
-      pos_t y0 = (delta_y > 0) ? (dest.bottom() - 1) : dest.y;
-      pos_t y1 = (delta_y > 0) ? dest.bottom() : (dest.y - 1);
-      FIXBROT_TRY(scan_hori(dest.x, y0, y1, dest.w));
+      pos_t y0 = (delta_y > 0) ? (dy1 - 1) : dy0;
+      pos_t y1 = (delta_y > 0) ? dy1 : (dy0 - 1);
+      FIXBROT_TRY(scan_hori(dx0, y0, y1, dw));
     }
 
     return result_t::SUCCESS;
@@ -483,11 +527,10 @@ class Renderer {
           c = palette[(iter + palette_phase) & (palette_size - 1)];
         }
         if (!finished) {
-          c >>= 1;
-          c &= 0x7BEF;
+          c = color_div2(c);
         }
       } else {
-        c = 0xFFE0;
+        c = color_pack_from_888(0xFF, 0xFF, 0x00);
       }
       line_buff[ix] = c;
     }
@@ -568,8 +611,19 @@ class Renderer {
   result_t clear_rect(rect_t view) {
 #if FIXBROT_ITER_12BIT
     for (pos_t y = 0; y < view.h; y++) {
-      for (pos_t x = 0; x < view.w; x++) {
-        work_buff_write(view.x + x, view.y + y, 0);
+      pos_t x0 = view.x;
+      pos_t x1 = view.x + view.w;
+      if (x0 % 2 == 1) {
+        work_buff_write(x0, view.y + y, 0);
+      }
+      int ix0 = (x0 + 1) / 2 * 3;
+      int ix1 = x1 / 2 * 3;
+      int n = ix1 - ix0;
+      if (n > 0) {
+        memset(work_buff + (view.y + y) * stride + ix0, 0, n);
+      }
+      if (x1 % 2 == 1) {
+        work_buff_write(x1 - 1, view.y + y, 0);
       }
     }
 #else
@@ -859,27 +913,27 @@ class Renderer {
     palette_size = MAX_PALETTE_SIZE >> slope;
     max_iter_color = 0x0000;
     for (uint16_t i = 0; i < palette_size; i++) {
-      int p = i * (32 * 6) / palette_size;
-      int c = p / 32;
-      int f = p % 32;
+      int p = i * (256 * 6) / palette_size;
+      int c = p / 256;
+      int f = p % 256;
       switch (c) {
         case 0:
-          palette[i] = pack565(0, f / 2, f);
+          palette[i] = color_pack_from_888(0, f / 4, f);
           break;
         case 1:
-          palette[i] = pack565(0, 16 + f, 31);
+          palette[i] = color_pack_from_888(0, 64 + f / 2, 255);
           break;
         case 2:
-          palette[i] = pack565(f, 48 + f / 2, 31);
+          palette[i] = color_pack_from_888(f, 192 + f / 4, 255);
           break;
         case 3:
-          palette[i] = pack565(31, 63 - f / 2, 31 - f);
+          palette[i] = color_pack_from_888(255, 255 - f / 4, 255 - f);
           break;
         case 4:
-          palette[i] = pack565(31, 47 - f, 0);
+          palette[i] = color_pack_from_888(255, 191 - f / 2, 0);
           break;
         default:
-          palette[i] = pack565(31 - f, 15 - f / 2, 0);
+          palette[i] = color_pack_from_888(255 - f, 63 - f / 4, 0);
           break;
       }
     }
@@ -889,27 +943,27 @@ class Renderer {
     palette_size = MAX_PALETTE_SIZE >> slope;
     max_iter_color = 0x0000;
     for (uint16_t i = 0; i < palette_size; i++) {
-      int p = i * (64 * 6) / palette_size;
-      int c = p / 64;
-      int f = p % 64;
+      int p = i * (256 * 6) / palette_size;
+      int c = p / 256;
+      int f = p % 256;
       switch (c) {
         case 0:
-          palette[i] = pack565(31, f, 0);
+          palette[i] = color_pack_from_888(255, f, 0);
           break;
         case 1:
-          palette[i] = pack565(31 - (f / 2), 63, 0);
+          palette[i] = color_pack_from_888(255 - f, 255, 0);
           break;
         case 2:
-          palette[i] = pack565(0, 63, f / 2);
+          palette[i] = color_pack_from_888(0, 255, f);
           break;
         case 3:
-          palette[i] = pack565(0, 63 - f, 31);
+          palette[i] = color_pack_from_888(0, 255 - f, 255);
           break;
         case 4:
-          palette[i] = pack565(f / 2, 0, 31);
+          palette[i] = color_pack_from_888(f, 0, 255);
           break;
         default:
-          palette[i] = pack565(31, 0, 31 - f / 2);
+          palette[i] = color_pack_from_888(255, 0, 255 - f);
           break;
       }
     }
@@ -919,11 +973,11 @@ class Renderer {
     palette_size = MAX_PALETTE_SIZE >> slope;
     max_iter_color = 0x0000;
     for (uint16_t i = 0; i < palette_size; i++) {
-      uint16_t gray = i * 128 / palette_size;
-      if (gray >= 64) {
-        gray = 127 - gray;
+      uint16_t gray = i * 512 / palette_size;
+      if (gray >= 256) {
+        gray = 511 - gray;
       }
-      palette[i] = pack565(gray >> 1, gray, gray >> 1);
+      palette[i] = color_pack_from_888(gray, gray, gray);
     }
   }
 
@@ -931,8 +985,11 @@ class Renderer {
     palette_size = 64 >> slope;
     max_iter_color = 0x0000;
     for (uint16_t i = 0; i < palette_size; i++) {
-      palette[i] =
-          (i < palette_size / 2) ? pack565(28, 56, 28) : pack565(4, 8, 4);
+      if (i < palette_size / 2) {
+        palette[i] = color_pack_from_888(224, 224, 224);
+      } else {
+        palette[i] = color_pack_from_888(32, 32, 32);
+      }
     }
   }
 };

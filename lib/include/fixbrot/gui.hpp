@@ -105,11 +105,11 @@ struct menu_item_t {
   pos_t y_center;
 };
 
-static const uint16_t MENU_PALETTE[4] = {
-    0x1082,
-    0x061F,
-    0xC618,
-    0xFFFF,
+static const col_t MENU_PALETTE[4] = {
+    color_pack_from_888(0x16, 0x16, 0x16),
+    color_pack_from_888(0x00, 0x80, 0xFF),
+    color_pack_from_888(0xC0, 0xC0, 0xC0),
+    color_pack_from_888(0xFF, 0xFF, 0xFF),
 };
 static constexpr uint8_t MENU_BACK = 0;
 static constexpr uint8_t MENU_ACTIVE = 1;
@@ -301,7 +301,7 @@ class GUI {
           }
           if (scroll_dir_x != 0) {
             int elapsed = now_ms - scroll_start_x_ms;
-            scroll_x = scroll_dir_x * clamp(1, 32, 1 + elapsed / 128);
+            scroll_x = scroll_dir_x * clamp(1, 12, 1 + elapsed / 32);
           }
 
           int new_dir_y = 0;
@@ -317,7 +317,7 @@ class GUI {
           }
           if (scroll_dir_y != 0) {
             int elapsed = now_ms - scroll_start_y_ms;
-            scroll_y = scroll_dir_y * clamp(1, 32, 1 + elapsed / 128);
+            scroll_y = scroll_dir_y * clamp(1, 12, 1 + elapsed / 32);
           }
 
           if (scroll_x != 0 || scroll_y != 0) {
@@ -571,11 +571,11 @@ class GUI {
       // menu shadow effect
       for (int i = 0; i < SHADOW_SIZE; i++) {
         uint8_t r, g, b;
-        unpack565(line_buff[menu_pos + i], &r, &g, &b);
+        color_unpack(line_buff[menu_pos + i], &r, &g, &b);
         r = (int)(r * shadow_alpha[i]) >> 8;
         g = (int)(g * shadow_alpha[i]) >> 8;
         b = (int)(b * shadow_alpha[i]) >> 8;
-        line_buff[menu_pos + i] = pack565(r, g, b);
+        line_buff[menu_pos + i] = color_pack(r, g, b);
       }
     }
 

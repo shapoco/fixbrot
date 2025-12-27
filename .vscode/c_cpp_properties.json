@@ -78,7 +78,8 @@
                 "${workspaceFolder}/app/picosystem/build/generated/pico_base"
             ],
             "defines": [
-                "FIXBROT_ITER_12BIT=1"
+                "FIXBROT_ITER_12BIT=1",
+                "FIXBROT_ARGB4444_BSWAP=1"
             ],
             "compilerPath": "/usr/bin/gcc",
             "cStandard": "c17",

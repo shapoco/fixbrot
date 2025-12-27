@@ -658,9 +658,6 @@ class Mandelbrot {
     fixed32_t yy = 0;
     iter_t iter = 0;
     while (++iter < max_iter && (xx + yy).int_part() < 4) {
-      // temp = ((abs(zr) * zr * zr) - (3 * abs(zr) * zi * zi)) + cr;
-      // zi = ((3 * abs(zr) * zr * abs(zi)) - (zi * zi * zi)) + ci;
-      // zr = temp;
       if (x < 0) xx = -xx;
       fixed32_t xxx = xx * x;
       fixed32_t xxy = xx * y.abs();

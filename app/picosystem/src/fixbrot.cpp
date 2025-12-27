@@ -27,6 +27,8 @@ void init() {
 }
 
 void update(uint32_t tick) {
+  uint64_t now_ms = ps::time();
+
   fb::button_t key_pressed = fb::button_t::NONE;
   if (ps::button(ps::RIGHT)) key_pressed |= fb::button_t::RIGHT;
   if (ps::button(ps::LEFT)) key_pressed |= fb::button_t::LEFT;
@@ -48,10 +50,10 @@ void update(uint32_t tick) {
   }
 
   if (gui.is_busy() || key_pressed != fb::button_t::NONE) {
-    last_busy_time_ms = tick;
+    last_busy_time_ms = now_ms;
     busy = true;
   } else {
-    busy = tick - last_busy_time_ms < 1000;
+    busy = now_ms - last_busy_time_ms < 1000;
   }
 
   if (!busy) {
@@ -69,19 +71,7 @@ void draw(uint32_t tick) {
   gui.paint_start();
   for (fb::pos_t y = 0; y < HEIGHT; y++) {
     gui.paint_line(y, wr_ptr);
-    for (fb::pos_t x = 0; x < WIDTH; x++) {
-      uint8_t r, g, b;
-      fb::unpack565(wr_ptr[x], &r, &g, &b);
-#if 0
-      if ((x + y) & 1) {
-        if (r < 31) r++;
-        if (g < 63) g++;
-        if (b < 31) b++;
-      }
-#endif
-      wr_ptr[x] = ps::rgb(r >> 1, g >> 2, b >> 1);
-    }
-    wr_ptr += 240;
+    wr_ptr += WIDTH;
   }
   gui.paint_end();
 }

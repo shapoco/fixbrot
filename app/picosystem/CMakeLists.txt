@@ -23,6 +23,7 @@ picosystem_executable(
 )
 
 add_definitions(-DFIXBROT_ITER_12BIT=1)
+add_definitions(-DFIXBROT_ARGB4444_BSWAP=1)
 
 target_include_directories(${APP_NAME} PRIVATE
   ../../lib/include

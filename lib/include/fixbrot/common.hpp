@@ -5,6 +5,10 @@
 #define FIXBROT_ITER_12BIT (0)
 #endif
 
+#ifndef FIXBROT_ARGB4444_BSWAP
+#define FIXBROT_ARGB4444_BSWAP (0)
+#endif
+
 #ifndef FIXBROT_NO_STDLIB
 #include <stdint.h>
 #endif
@@ -131,15 +135,50 @@ prev_palette_of(builtin_palette_t palette) {
                              (int)builtin_palette_t::LAST);
 }
 
-static FIXBROT_INLINE col_t pack565(uint8_t r, uint8_t g, uint8_t b) {
+static FIXBROT_INLINE constexpr col_t color_pack_from_888(uint8_t r, uint8_t g,
+                                                          uint8_t b) {
+#if FIXBROT_ARGB4444_BSWAP
+  r >>= 4;
+  g >>= 4;
+  b >>= 4;
+  return ((uint16_t)b << 8) | ((uint16_t)g << 12) | r | 0x00F0;
+#else
+  r >>= 3;
+  g >>= 2;
+  b >>= 3;
   return ((uint16_t)r << 11) | ((uint16_t)g << 5) | b;
+#endif
 }
 
-static FIXBROT_INLINE void unpack565(col_t cpl, uint8_t *r, uint8_t *g,
-                                     uint8_t *b) {
-  *r = (cpl >> 11) & 0x1F;
-  *g = (cpl >> 5) & 0x3F;
-  *b = cpl & 0x1F;
+static FIXBROT_INLINE constexpr col_t color_pack(uint8_t r, uint8_t g,
+                                                 uint8_t b) {
+#if FIXBROT_ARGB4444_BSWAP
+  return ((uint16_t)b << 8) | ((uint16_t)g << 12) | r | 0x00F0;
+#else
+  return ((uint16_t)r << 11) | ((uint16_t)g << 5) | b;
+#endif
+}
+
+static FIXBROT_INLINE constexpr void color_unpack(col_t col, uint8_t *r,
+                                                  uint8_t *g, uint8_t *b) {
+#if FIXBROT_ARGB4444_BSWAP
+  *r = col & 0x0F;
+  *g = (col >> 12) & 0x0F;
+  *b = (col >> 8) & 0x0F;
+#else
+  *r = (col >> 11) & 0x1F;
+  *g = (col >> 5) & 0x3F;
+  *b = col & 0x1F;
+#endif
+}
+
+static FIXBROT_INLINE constexpr col_t color_div2(col_t c) {
+  c >>= 1;
+#if FIXBROT_ARGB4444_BSWAP
+  return (c & 0x7707) | 0x00F0;
+#else
+  return c & 0x7BEF;
+#endif
 }
 
 template <typename T>
