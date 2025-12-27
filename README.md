@@ -1,8 +1,8 @@
 # FixBrot
 
-Mandelbrot Viewer for [PicoPad](https://github.com/pajenicko/picopad) / [PicoSystem](https://shop.pimoroni.com/products/picosystem) / [M5Stack CoreS3](https://docs.m5stack.com/en/core/CoreS3) with Border Tracing Algorithm.
+A 64-bit fixed-point precision Mandelbrot set viewer for [PicoPad](https://github.com/pajenicko/picopad) / [PicoSystem](https://shop.pimoroni.com/products/picosystem) / [M5Stack CoreS3](https://docs.m5stack.com/en/core/CoreS3) with Border Tracing Algorithm.
 
-https://github.com/user-attachments/assets/eaa0953f-67d0-4af1-865a-db988a986c22
+[![Demo Video](./image/video_thumb.jpg)](https://youtu.be/vfgkUTCUK6k)
 
 ## Binary Download
 
