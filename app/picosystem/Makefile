@@ -1,9 +1,11 @@
 .PHONY: all build clean flash
 
+REPO_DIR := $(shell cd ../.. && pwd)
+
 APP_NAME := fixbrot
 APP_BUILD_DIR := build
 APP_SRC_DIR := src
-APP_BIN_DIR := bin
+APP_BIN_DIR := $(REPO_DIR)/bin/picosystem
 APP_BIN := $(APP_BIN_DIR)/$(APP_NAME).uf2
 
 PICO_DRIVE := e

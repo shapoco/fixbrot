@@ -40,10 +40,11 @@ git clone https://github.com/Panda381/PicoLibSDK.git
 export PICOLIBSDK_PATH=${PWD}/PicoLibSDK
 git clone https://github.com/shapoco/fixbrot.git
 cd fixbrot/app/picopad
-make DEVICE=picopad20 all
+make DEVICE=picopad10 clean all
+make DEVICE=picopad20 clean all
 ```
 
-binary generated in `fixbrot/app/picopad/bin/`.
+binary generated in `bin/picopad10/` or `bin/picopad20/`.
 
 ### PicoSystem (Linux/WSL2)
 
@@ -56,6 +57,8 @@ binary generated in `fixbrot/app/picopad/bin/`.
     cd fixbrot/app/picosystem
     make
     ```
+
+binary generated in `bin/picosystem/`.
 
 ### M5Stack CoreS3 (Arduino IDE)
 
