@@ -28,7 +28,7 @@ build: $(BIN)
 
 $(BIN): $(DEPENDENCIES)
 	@mkdir -p "$(BIN_DIR)"
-	./build.sh -d "$(DEVICE)" -o "$(BIN_DIR)"
+	./build.sh -g "$(GRPDIR)" -t "$(TARGET)" -d "$(DEVICE)" -o "$(BIN_DIR)"
 
 flash: $(BIN)
 	sudo mkdir -p /mnt/$(PICO_DRIVE)
