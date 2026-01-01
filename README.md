@@ -73,3 +73,7 @@ binary generated in `bin/picosystem/`.
 4. Connect your M5Stack CoreS3 to the PC, and specify board.
 5. Open `Tools` in menu bar, and click `PSRAM: ...` --&gt; `Disabled` (to improve performance).
 6. Upload the sketch to the CoreS3.
+
+## Gallery
+
+<img src="image/sample-000.jpg" height="192"> <img src="image/sample-001.jpg" height="192"> <img src="image/sample-002.jpg" height="192"> <img src="image/sample-003.jpg" height="192"> <img src="image/sample-004.jpg" height="192"> <img src="image/sample-005.jpg" height="192"> <img src="image/sample-006.jpg" height="192"> <img src="image/sample-007.jpg" height="192"> <img src="image/sample-008.jpg" height="192"> <img src="image/sample-009.jpg" height="192"> <img src="image/sample-010.jpg" height="192"> <img src="image/sample-011.jpg" height="192"> <img src="image/sample-012.jpg" height="192"> <img src="image/sample-013.jpg" height="192"> <img src="image/sample-014.jpg" height="192"> <img src="image/sample-015.jpg" height="192">
