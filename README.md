@@ -41,15 +41,17 @@ See [Releases](https://github.com/shapoco/fixbrot/releases).
 
 ```sh
 sudo apt install build-essential gcc-arm-none-eabi
+
 git clone https://github.com/Panda381/PicoLibSDK.git
 export PICOLIBSDK_PATH=${PWD}/PicoLibSDK
+
 git clone --recurse-submodules git@github.com:shapoco/fixbrot.git
 cd fixbrot/app/picopad
 make DEVICE=picopad10 clean all
 make DEVICE=picopad20 clean all
 ```
 
-binary generated in `bin/picopad10/` and `bin/picopad20/`.
+binary generated in `fixbrot/bin/picopad10/` and `fixbrot/bin/picopad20/`.
 
 ### PicoSystem (Linux/WSL2)
 
@@ -63,7 +65,7 @@ binary generated in `bin/picopad10/` and `bin/picopad20/`.
     make
     ```
 
-binary generated in `bin/picosystem/`.
+binary generated in `fixbrot/bin/picosystem/`.
 
 ### M5Stack CoreS3 (Arduino IDE)
 
