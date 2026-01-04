@@ -40,15 +40,16 @@ See [Releases](https://github.com/shapoco/fixbrot/releases).
 ### PicoPad (Linux/WSL2)
 
 ```sh
+sudo apt install build-essential gcc-arm-none-eabi
 git clone https://github.com/Panda381/PicoLibSDK.git
 export PICOLIBSDK_PATH=${PWD}/PicoLibSDK
-git clone https://github.com/shapoco/fixbrot.git
+git clone --recurse-submodules git@github.com:shapoco/fixbrot.git
 cd fixbrot/app/picopad
 make DEVICE=picopad10 clean all
 make DEVICE=picopad20 clean all
 ```
 
-binary generated in `bin/picopad10/` or `bin/picopad20/`.
+binary generated in `bin/picopad10/` and `bin/picopad20/`.
 
 ### PicoSystem (Linux/WSL2)
 
@@ -57,7 +58,7 @@ binary generated in `bin/picopad10/` or `bin/picopad20/`.
 3. Checkout or download this repository and run `make` in `app/picosystem`
 
     ```sh
-    git clone https://github.com/shapoco/fixbrot.git
+    git clone --recurse-submodules git@github.com:shapoco/fixbrot.git
     cd fixbrot/app/picosystem
     make
     ```
